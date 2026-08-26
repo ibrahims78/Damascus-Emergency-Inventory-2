@@ -65,3 +65,7 @@ release-staging/
 # Workspace-only attachments and agent-generated previews
 attached_assets/
 /.agents/outputs/
+
+# local PGlite data directory (created at runtime)
+.damascus-data/
+
