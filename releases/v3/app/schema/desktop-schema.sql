@@ -256,6 +256,7 @@ CREATE TABLE "transactions" (
 	"return_condition" text,
 	"reason" text,
 	"is_historical_incomplete" boolean DEFAULT false NOT NULL,
+	"details" jsonb,
 	"notes" text,
 	"created_by" integer,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

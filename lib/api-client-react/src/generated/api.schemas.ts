@@ -531,6 +531,12 @@ export const TransactionDeliveryDestination = {
   ambulance_point: 'ambulance_point',
 } as const;
 
+/**
+ * Structured movement details (stock before/after, delta, equipment snapshots) — used by adjustment vouchers
+ * @nullable
+ */
+export type TransactionDetails = { [key: string]: unknown } | null;
+
 export interface Transaction {
   id: number;
   type: TransactionType;
@@ -590,6 +596,11 @@ export interface Transaction {
   /** @nullable */
   reason?: string | null;
   documentNumber: string;
+  /**
+     * Structured movement details (stock before/after, delta, equipment snapshots) — used by adjustment vouchers
+     * @nullable
+     */
+  details?: TransactionDetails;
   /** @nullable */
   notes?: string | null;
   /** @nullable */
@@ -717,13 +728,25 @@ export type AdjustmentInputItemType = typeof AdjustmentInputItemType[keyof typeo
 
 export const AdjustmentInputItemType = {
   item: 'item',
+  equipment: 'equipment',
 } as const;
 
 export interface AdjustmentInput {
   itemType: AdjustmentInputItemType;
-  itemId: number;
+  /**
+     * Required when itemType is item
+     * @nullable
+     */
+  itemId?: number | null;
+  /**
+     * Required when itemType is equipment
+     * @nullable
+     */
+  equipmentId?: number | null;
   /** @minimum 0 */
   newStock: number;
+  documentDate?: string;
+  /** @minLength 5 */
   reason: string;
   /** @nullable */
   notes?: string | null;

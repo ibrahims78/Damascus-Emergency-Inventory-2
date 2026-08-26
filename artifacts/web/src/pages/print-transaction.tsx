@@ -252,6 +252,11 @@ export function PrintTransactionPage() {
             )}
           </div>
 
+          {/* ===== ADJUSTMENT DETAILS (structured snapshot) ===== */}
+          {isAdjustment && tx.details && (
+            <AdjustmentDetailsBlock details={tx.details} itemName={itemName} />
+          )}
+
           {/* ===== ITEMS TABLE ===== */}
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '28px' }}>
             <thead>
@@ -384,6 +389,50 @@ function SignatureBox({ title, name }: { title: string; name?: string }) {
         )}
         <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>التوقيع والختم</div>
       </div>
+    </div>
+  );
+}
+
+/* ─── Structured adjustment snapshot (approved plan §3.1) ─── */
+
+function AdjustmentDetailsBlock({ details, itemName }: { details: unknown; itemName?: string | null }) {
+  const d = (details ?? {}) as Record<string, unknown>;
+  const delta = typeof d.delta === 'number' ? d.delta : null;
+  const deltaType = d.deltaType === 'decrease' ? 'نقص' : 'زيادة';
+  const isEquipment = !!(d.openCustody !== undefined || d.equipmentNameSnap);
+  const row = (label: string, value: React.ReactNode) => (
+    <tr>
+      <td style={{ ...tdStyle('right'), backgroundColor: '#f9fafb', fontWeight: 600, width: '220px' }}>
+        {label}
+      </td>
+      <td style={tdStyle('right')}>
+        <span style={{ fontWeight: 700 }}>{value}</span>
+      </td>
+    </tr>
+  );
+
+  return (
+    <div style={{ marginBottom: '28px' }}>
+      <h3 style={{ fontWeight: 800, fontSize: '14px', marginBottom: '10px', color: '#374151' }}>
+        تفاصيل التسوية (لقطة موثقة)
+      </h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <tbody>
+          {row('الرصيد قبل الجرد', `${d.previousStock ?? '—'}`)}
+          {row('الرصيد بعد الجرد', `${d.newStock ?? '—'}`)}
+          {row('الفرق', delta !== null ? (
+            <span style={{ color: (d.deltaType ?? '') === 'decrease' ? '#dc2626' : '#16a34a' }}>
+              {delta > 0 ? '+' : ''}{delta} ({deltaType})
+            </span>
+          ) : '—')}
+          {isEquipment && row('العهد المفتوحة وقت التسوية', `${d.openCustody ?? 0}`)}
+          {isEquipment && row('المتاح في المستودع قبل التسوية', `${d.availableBefore ?? '—'}`)}
+          {isEquipment && d.equipmentModelSnap ? row('الموديل', `${d.equipmentModelSnap}`) : null}
+          {isEquipment && d.equipmentSerialSnap ? row('الرقم التسلسلي', `${d.equipmentSerialSnap}`) : null}
+          {isEquipment && d.equipmentConditionSnap ? row('الحالة وقت التسوية', `${d.equipmentConditionSnap}`) : null}
+          {row('المرجع', itemName ?? '—')}
+        </tbody>
+      </table>
     </div>
   );
 }

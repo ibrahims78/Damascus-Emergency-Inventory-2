@@ -2317,6 +2317,9 @@ components:
           type: ["string", "null"]
         documentNumber:
           type: string
+        details:
+          type: ["object", "null"]
+          description: Structured movement details (stock before/after, delta, equipment snapshots) — used by adjustment vouchers
         notes:
           type: ["string", "null"]
         createdByName:
@@ -2466,18 +2469,26 @@ components:
 
     AdjustmentInput:
       type: object
-      required: [itemType, itemId, newStock, reason]
+      required: [itemType, newStock, reason]
       properties:
         itemType:
           type: string
-          enum: [item]
+          enum: [item, equipment]
         itemId:
-          type: integer
+          type: ["integer", "null"]
+          description: Required when itemType is item
+        equipmentId:
+          type: ["integer", "null"]
+          description: Required when itemType is equipment
         newStock:
           type: integer
           minimum: 0
+        documentDate:
+          type: string
+          format: date
         reason:
           type: string
+          minLength: 5
         notes:
           type: ["string", "null"]
 

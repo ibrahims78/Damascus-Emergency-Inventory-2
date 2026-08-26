@@ -390,9 +390,32 @@ router.put(
       if (originCountry !== undefined) updates.originCountry = originCountry || null;
       if (currentHolder !== undefined) updates.currentHolder = currentHolder || null;
       if (notes !== undefined) updates.notes = notes || null;
+      // ── Balance is no longer editable from the metadata edit screen ────────
+      // Approved plan §3: quantity changes must go through a documented
+      // inventory adjustment movement. A same-value payload is tolerated so
+      // legacy clients that resend the full record keep working.
       if (quantity !== undefined) {
-        const qty = parseInt(String(quantity), 10);
-        updates.quantity = isNaN(qty) || qty < 1 ? 1 : qty;
+        const requestedQty = parseInt(String(quantity), 10);
+        const currentQty = await db.query.equipmentTable
+          .findFirst({
+            where: (e, { eq: eqFn }) => eqFn(e.id, id),
+            columns: { quantity: true },
+          })
+          .then((row) => row?.quantity ?? null);
+        if (
+          currentQty !== null &&
+          !Number.isNaN(requestedQty) &&
+          requestedQty !== currentQty
+        ) {
+          res.status(409).json({
+            error:
+              "لا يمكن تعديل كمية التجهيز من شاشة البيانات؛ استخدم «تسوية الجرد» لإصدار سند حركة موثق",
+            code: "EQUIPMENT_QUANTITY_NOT_EDITABLE",
+          });
+          return;
+        }
+        // Idempotent same-value payload: allowed, but never applied as a
+        // balance write from this endpoint.
       }
       if (minQuantity !== undefined) {
         const minQty = parseInt(String(minQuantity), 10);

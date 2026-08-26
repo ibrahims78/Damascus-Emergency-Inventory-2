@@ -217,6 +217,7 @@ async function getTransaction(id: number) {
       returnCondition: transactionsTable.returnCondition,
       reason: transactionsTable.reason,
       notes: transactionsTable.notes,
+      details: transactionsTable.details,
       createdByName: usersTable.fullName,
       createdAt: transactionsTable.createdAt,
     })

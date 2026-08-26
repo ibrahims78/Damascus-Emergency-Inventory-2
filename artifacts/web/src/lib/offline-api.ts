@@ -868,7 +868,12 @@ async function route(pathname: string, searchParams: URLSearchParams, method: st
     return mutate((state) => {
       const index = state.equipment.findIndex((entry) => entry.id === equipmentId);
       if (index < 0) return failure(404, 'التجهيز غير موجود');
-      state.equipment[index] = equipmentFromInput(state, readBody(init), state.equipment[index]);
+      const body = readBody(init);
+      const existing = state.equipment[index];
+      if (body.quantity !== undefined && Number(body.quantity) !== numberValue(existing.quantity)) {
+        return failure(409, 'لا يمكن تعديل كمية التجهيز مباشرة — استخدم تسوية الجرد (الرصيد يُدار عبر سندات الحركة)' );
+      }
+      state.equipment[index] = equipmentFromInput(state, body, existing);
       addAudit(state, currentUser, 'update', 'equipment', equipmentId);
       return json(state.equipment[index]);
     });
@@ -1028,6 +1033,25 @@ async function route(pathname: string, searchParams: URLSearchParams, method: st
         createdAt: now(),
         ...body,
       };
+      if (type === 'adjust') {
+        const newStock = numberValue(body.newStock);
+        if (body.itemType === 'equipment') {
+          const equipment = state.equipment.find((entry) => entry.id === Number(body.equipmentId));
+          if (!equipment) return failure(404, 'التجهيز غير موجود');
+          const previousStock = numberValue(equipment.quantity, 0);
+          if (newStock < previousStock && newStock < 0) return failure(400, 'الرصيد الجديد يجب أن يكون صفرًا أو أكبر');
+          equipment.quantity = newStock;
+          transaction.quantity = Math.abs(newStock - previousStock);
+          transaction.details = { previousStock, newStock, delta: newStock - previousStock, deltaType: newStock > previousStock ? 'increase' : 'decrease', openCustody: 0, availableBefore: previousStock, equipmentNameSnap: equipment.name, equipmentModelSnap: equipment.model ?? null, equipmentSerialSnap: equipment.serialNumber ?? null, equipmentConditionSnap: equipment.condition ?? null };
+        } else {
+          const item = state.items.find((entry) => entry.id === Number(body.itemId));
+          if (!item) return failure(404, 'المادة غير موجودة');
+          const previousStock = numberValue(item.currentStock, 0);
+          item.currentStock = newStock;
+          transaction.quantity = Math.abs(newStock - previousStock);
+          transaction.details = { previousStock, newStock, delta: newStock - previousStock, deltaType: newStock > previousStock ? 'increase' : 'decrease' };
+        }
+      }
       const target = state.items.find((item) => item.id === Number(body.itemId));
       if (target && ['in'].includes(type)) target.currentStock = numberValue(target.currentStock) + numberValue(body.quantity);
       if (target && ['out', 'damage', 'central-return', 'central_return'].includes(type)) {

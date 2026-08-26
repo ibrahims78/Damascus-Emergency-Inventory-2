@@ -105,6 +105,7 @@ export async function getEquipmentHistory(
           custodyLocation: transactionsTable.custodyLocation,
           reason: transactionsTable.reason,
           notes: transactionsTable.notes,
+          details: transactionsTable.details,
           createdAt: transactionsTable.createdAt,
           operatorName: usersTable.fullName,
         })

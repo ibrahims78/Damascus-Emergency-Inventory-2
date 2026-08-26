@@ -30,6 +30,7 @@ import {
   ArrowDown,
   FileSpreadsheet,
   Loader2,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +70,7 @@ import {
 import { toast } from 'sonner';
 import { EquipmentForm } from './equipment-form';
 import { EquipmentDetailsPage } from './equipment-details';
+import { AdjustmentForm } from './adjustment-form';
 import { downloadFile } from '@/lib/file-download';
 
 /* ─────────────────────────── Condition config ───────────────────────────── */
@@ -96,10 +98,13 @@ const DEFAULT_TECHNICAL_CONDITIONS = [
 export function EquipmentPage() {
   const [matchNew] = useRoute('/equipment/new');
   const [matchEdit, params] = useRoute('/equipment/:id/edit');
+  const [matchAdjust, adjustParams] = useRoute('/equipment/:id/adjust');
   const [matchDetails, detailsParams] = useRoute('/equipment/:id');
 
   if (matchNew) return <EquipmentForm />;
   if (matchEdit && params?.id) return <EquipmentForm equipmentId={parseInt(params.id)} />;
+  if (matchAdjust && adjustParams?.id)
+    return <AdjustmentForm preselectedEquipmentId={parseInt(adjustParams.id)} />;
   if (matchDetails && detailsParams?.id) return <EquipmentDetailsPage equipmentId={parseInt(detailsParams.id)} />;
 
   return <EquipmentList />;
@@ -751,6 +756,20 @@ function EquipmentList() {
                         {canEdit && (
                           <TableCell>
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-amber-600 hover:text-amber-600 hover:bg-amber-500/10"
+                                    aria-label={`تسوية جرد ${eq.name}`}
+                                    onClick={() => setLocation(`/equipment/${eq.id}/adjust`)}
+                                  >
+                                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>تسوية جرد</TooltipContent>
+                              </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button

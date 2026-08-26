@@ -232,7 +232,7 @@ async function lockItem(tx: DbTransaction, itemId: number) {
 
 async function lockEquipment(tx: DbTransaction, equipmentId: number) {
   const result = await tx.execute(sql`
-    SELECT id, name, quantity, condition, serial_number, current_holder
+    SELECT id, name, quantity, condition, serial_number, current_holder, model
     FROM equipment
     WHERE id = ${equipmentId}
     FOR UPDATE
@@ -245,6 +245,7 @@ async function lockEquipment(tx: DbTransaction, equipmentId: number) {
         condition: string;
         serial_number: string | null;
         current_holder: string | null;
+        model: string | null;
       }
     | undefined;
   if (!equipment) {
@@ -337,6 +338,7 @@ async function insertTransaction(
   snapshots: {
     recipientNameSnap?: string | null;
     exitReasonSnap?: string | null;
+    details?: Record<string, unknown> | null;
   } = {},
 ) {
   const [transaction] = await tx
@@ -377,6 +379,7 @@ async function insertTransaction(
       custodyStatus: type === "custody_out" ? "open" : null,
       returnCondition: textOrNull(input.returnCondition),
       reason: textOrNull(input.reason),
+      details: snapshots.details ?? null,
       notes: textOrNull(input.notes),
       createdBy: context.userId,
     })
@@ -967,34 +970,136 @@ async function createAdjustment(
   input: MovementInput,
   documentNumber: string,
 ) {
-  const itemId = parseOptionalId(input.itemId);
-  if (!itemId) {
-    throw new InventoryMovementError(
-      "ITEM_ADJUSTMENT_ONLY",
-      "التسوية الحالية مخصصة لرصيد المواد فقط",
-    );
-  }
+  // ── Shared validation (approved plan §4.1) ────────────────────────────────
   const newStock = Number.parseInt(String(input.newStock ?? ""), 10);
   if (!Number.isSafeInteger(newStock) || newStock < 0) {
     throw new InventoryMovementError("INVALID_STOCK", "الرصيد الجديد يجب أن يكون صفرًا أو أكبر");
   }
-  const reason = assertNonEmpty(input.reason, "سبب التسوية");
-  const item = await lockItem(tx, itemId);
-  const delta = newStock - Number(item.current_stock);
+  const rawReason = String(input.reason ?? "").trim();
+  if (!rawReason) {
+    throw new InventoryMovementError("REQUIRED_FIELD", "سبب التسوية مطلوب");
+  }
+  if (rawReason.length < 5) {
+    throw new InventoryMovementError("REASON_TOO_SHORT", "سبب التسوية قصير جدًا (5 أحرف على الأقل)");
+  }
+  // Mandatory voucher date for adjustments (approved plan §3.8).
+  // The shared helper throws INVALID_DATE; the approved contract for the
+  // adjust endpoint is INVALID_DOCUMENT_DATE (approved plan §4).
+  try {
+    assertIsoDate(input.documentDate, "تاريخ الجرد", true);
+  } catch {
+    throw new InventoryMovementError(
+      "INVALID_DOCUMENT_DATE",
+      "تاريخ الجرد مطلوب بصيغة YYYY-MM-DD",
+    );
+  }
+
+  const itemId = parseOptionalId(input.itemId);
+  const equipmentId = parseOptionalId(input.equipmentId);
+  if (itemId && equipmentId) {
+    throw new InventoryMovementError(
+      "ENTITY_TYPE_MISMATCH",
+      "أرسل مرجع مادة أو تجهيز وليس كليهما معًا",
+    );
+  }
+
+  // ── Item adjustment (legacy behavior preserved) ───────────────────────────
+  if (itemId) {
+    const item = await lockItem(tx, itemId);
+    const delta = newStock - Number(item.current_stock);
+    if (delta === 0) {
+      throw new InventoryMovementError("NO_STOCK_CHANGE", "الرصيد الجديد يساوي الرصيد الحالي");
+    }
+    const entity = assertEntityReference("item", itemId, null);
+    const details = {
+      previousStock: Number(item.current_stock),
+      newStock,
+      delta,
+      deltaType: delta > 0 ? "increase" : "decrease",
+    };
+    const transaction = await insertTransaction(
+      tx,
+      context,
+      {
+        ...input,
+        itemType: "item",
+        itemId,
+        reason: rawReason,
+        notes: [
+          `تسوية جرد — السبب: ${rawReason}`,
+          `الكمية قبل: ${item.current_stock}، الكمية بعد: ${newStock}، الفرق: ${delta >= 0 ? "+" : ""}${delta}`,
+          textOrNull(input.notes),
+        ]
+          .filter(Boolean)
+          .join(". "),
+      },
+      "adjust",
+      entity,
+      Math.abs(delta),
+      documentNumber,
+      { details },
+    );
+    await tx
+      .update(itemsTable)
+      .set({ currentStock: newStock, updatedAt: new Date() })
+      .where(eq(itemsTable.id, itemId));
+    return transaction;
+  }
+
+  // ── Equipment adjustment (approved plan §3.3/§3.5/§4) ─────────────────────
+  if (!equipmentId) {
+    throw new InventoryMovementError(
+      "ENTITY_TYPE_MISMATCH",
+      "يجب تحديد مادة أو تجهيز للتسوية",
+    );
+  }
+  const equipment = await lockEquipment(tx, equipmentId);
+  // Serialized equipment is handled through loss/scrap/condition paths.
+  if (equipment.serial_number) {
+    throw new InventoryMovementError(
+      "SERIAL_EQUIPMENT_ADJUSTMENT_BLOCKED",
+      "التجهيز المسلسَل يُعالَج عبر مسار الفقد/الشطب أو تغيير الحالة، وليس عبر تسوية الجرد",
+      409,
+    );
+  }
+  const openCustody = await getOpenCustodyQuantity(tx, equipment.id);
+  if (newStock < openCustody) {
+    throw new InventoryMovementError(
+      "EQUIPMENT_CUSTODY_BALANCE",
+      `لا يمكن إنقاص رصيد التجهيز عن الكمية المفتوحة على العهد (${openCustody})`,
+      409,
+    );
+  }
+  const delta = newStock - Number(equipment.quantity);
   if (delta === 0) {
     throw new InventoryMovementError("NO_STOCK_CHANGE", "الرصيد الجديد يساوي الرصيد الحالي");
   }
-  const entity = assertEntityReference("item", itemId, null);
+  const entity = assertEntityReference("equipment", null, equipment.id);
+  const available = calculateEquipmentAvailable(equipment.quantity, openCustody);
+  const details = {
+    previousStock: Number(equipment.quantity),
+    newStock,
+    delta,
+    deltaType: delta > 0 ? "increase" : "decrease",
+    openCustody,
+    availableBefore: available,
+    equipmentNameSnap: equipment.name,
+    equipmentModelSnap: equipment.model ?? null,
+    equipmentSerialSnap: equipment.serial_number ?? null,
+    equipmentConditionSnap: equipment.condition,
+  };
   const transaction = await insertTransaction(
     tx,
     context,
     {
       ...input,
-      itemType: "item",
-      itemId,
+      itemType: "equipment",
+      equipmentId: equipment.id,
+      reason: rawReason,
       notes: [
-        `تسوية جرد — السبب: ${reason}`,
-        `الكمية قبل: ${item.current_stock}، الكمية بعد: ${newStock}، الفرق: ${delta >= 0 ? "+" : ""}${delta}`,
+        `تسوية جرد — السبب: ${rawReason}`,
+        `الكمية قبل: ${equipment.quantity}، الكمية بعد: ${newStock}، الفرق: ${delta >= 0 ? "+" : ""}${delta}`,
+        `العهد المفتوحة: ${openCustody}`,
         textOrNull(input.notes),
       ]
         .filter(Boolean)
@@ -1004,11 +1109,12 @@ async function createAdjustment(
     entity,
     Math.abs(delta),
     documentNumber,
+    { details },
   );
   await tx
-    .update(itemsTable)
-    .set({ currentStock: newStock, updatedAt: new Date() })
-    .where(eq(itemsTable.id, itemId));
+    .update(equipmentTable)
+    .set({ quantity: newStock, updatedAt: new Date() })
+    .where(eq(equipmentTable.id, equipment.id));
   return transaction;
 }
 

@@ -103,6 +103,7 @@ function Router() {
       <Route path="/equipment"><ProtectedRoute component={EquipmentPage} /></Route>
       <Route path="/equipment/new"><ProtectedRoute component={EquipmentPage} /></Route>
       <Route path="/equipment/:id/edit"><ProtectedRoute component={EquipmentPage} /></Route>
+      <Route path="/equipment/:id/adjust"><ProtectedRoute component={EquipmentPage} /></Route>
       <Route path="/equipment/:id"><ProtectedRoute component={EquipmentPage} /></Route>
       <Route path="/custodies/:id"><ProtectedRoute component={CustodyDetailsPage} /></Route>
 

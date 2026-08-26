@@ -655,6 +655,9 @@ export const ListTransactionsResponse = zod.object({
   "returnCondition": zod.string().nullish(),
   "reason": zod.string().nullish(),
   "documentNumber": zod.string(),
+  "details": zod.object({
+
+}).passthrough().nullish().describe('Structured movement details (stock before\/after, delta, equipment snapshots) — used by adjustment vouchers'),
   "notes": zod.string().nullish(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -717,6 +720,9 @@ export const CreateInTransactionResponse = zod.object({
   "returnCondition": zod.string().nullish(),
   "reason": zod.string().nullish(),
   "documentNumber": zod.string(),
+  "details": zod.object({
+
+}).passthrough().nullish().describe('Structured movement details (stock before\/after, delta, equipment snapshots) — used by adjustment vouchers'),
   "notes": zod.string().nullish(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -776,6 +782,9 @@ export const CreateOutTransactionResponse = zod.object({
   "returnCondition": zod.string().nullish(),
   "reason": zod.string().nullish(),
   "documentNumber": zod.string(),
+  "details": zod.object({
+
+}).passthrough().nullish().describe('Structured movement details (stock before\/after, delta, equipment snapshots) — used by adjustment vouchers'),
   "notes": zod.string().nullish(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -787,13 +796,17 @@ export const CreateOutTransactionResponse = zod.object({
  */
 export const createInventoryAdjustmentBodyNewStockMin = 0;
 
+export const createInventoryAdjustmentBodyReasonMin = 5;
+
 
 
 export const CreateInventoryAdjustmentBody = zod.object({
-  "itemType": zod.enum(['item']),
-  "itemId": zod.number().int(),
+  "itemType": zod.enum(['item', 'equipment']),
+  "itemId": zod.number().int().nullish().describe('Required when itemType is item'),
+  "equipmentId": zod.number().int().nullish().describe('Required when itemType is equipment'),
   "newStock": zod.number().int().min(createInventoryAdjustmentBodyNewStockMin),
-  "reason": zod.string(),
+  "documentDate": zod.coerce.date().optional(),
+  "reason": zod.string().min(createInventoryAdjustmentBodyReasonMin),
   "notes": zod.string().nullish()
 })
 
@@ -829,6 +842,9 @@ export const CreateInventoryAdjustmentResponse = zod.object({
   "returnCondition": zod.string().nullish(),
   "reason": zod.string().nullish(),
   "documentNumber": zod.string(),
+  "details": zod.object({
+
+}).passthrough().nullish().describe('Structured movement details (stock before\/after, delta, equipment snapshots) — used by adjustment vouchers'),
   "notes": zod.string().nullish(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -885,6 +901,9 @@ export const CreateCustodyOutTransactionResponse = zod.object({
   "returnCondition": zod.string().nullish(),
   "reason": zod.string().nullish(),
   "documentNumber": zod.string(),
+  "details": zod.object({
+
+}).passthrough().nullish().describe('Structured movement details (stock before\/after, delta, equipment snapshots) — used by adjustment vouchers'),
   "notes": zod.string().nullish(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -938,6 +957,9 @@ export const CreateCustodyReturnTransactionResponse = zod.object({
   "returnCondition": zod.string().nullish(),
   "reason": zod.string().nullish(),
   "documentNumber": zod.string(),
+  "details": zod.object({
+
+}).passthrough().nullish().describe('Structured movement details (stock before\/after, delta, equipment snapshots) — used by adjustment vouchers'),
   "notes": zod.string().nullish(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -992,6 +1014,9 @@ export const CreateDamageTransactionResponse = zod.object({
   "returnCondition": zod.string().nullish(),
   "reason": zod.string().nullish(),
   "documentNumber": zod.string(),
+  "details": zod.object({
+
+}).passthrough().nullish().describe('Structured movement details (stock before\/after, delta, equipment snapshots) — used by adjustment vouchers'),
   "notes": zod.string().nullish(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -1047,6 +1072,9 @@ export const CreateCentralReturnTransactionResponse = zod.object({
   "returnCondition": zod.string().nullish(),
   "reason": zod.string().nullish(),
   "documentNumber": zod.string(),
+  "details": zod.object({
+
+}).passthrough().nullish().describe('Structured movement details (stock before\/after, delta, equipment snapshots) — used by adjustment vouchers'),
   "notes": zod.string().nullish(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -1177,6 +1205,9 @@ export const GetTransactionResponse = zod.object({
   "returnCondition": zod.string().nullish(),
   "reason": zod.string().nullish(),
   "documentNumber": zod.string(),
+  "details": zod.object({
+
+}).passthrough().nullish().describe('Structured movement details (stock before\/after, delta, equipment snapshots) — used by adjustment vouchers'),
   "notes": zod.string().nullish(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -1223,6 +1254,9 @@ export const GetTransactionPrintResponse = zod.object({
   "returnCondition": zod.string().nullish(),
   "reason": zod.string().nullish(),
   "documentNumber": zod.string(),
+  "details": zod.object({
+
+}).passthrough().nullish().describe('Structured movement details (stock before\/after, delta, equipment snapshots) — used by adjustment vouchers'),
   "notes": zod.string().nullish(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -1479,6 +1513,9 @@ export const GetMovementsReportResponseItem = zod.object({
   "returnCondition": zod.string().nullish(),
   "reason": zod.string().nullish(),
   "documentNumber": zod.string(),
+  "details": zod.object({
+
+}).passthrough().nullish().describe('Structured movement details (stock before\/after, delta, equipment snapshots) — used by adjustment vouchers'),
   "notes": zod.string().nullish(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()

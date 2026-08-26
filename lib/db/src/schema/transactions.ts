@@ -2,6 +2,7 @@ import {
   check,
   date,
   index,
+  jsonb,
   pgTable,
   serial,
   text,
@@ -70,6 +71,10 @@ export const transactionsTable = pgTable(
     isHistoricalIncomplete: boolean("is_historical_incomplete")
       .notNull()
       .default(false),
+    // Structured movement details (approved plan 3.1): stock before/after,
+    // delta, and equipment snapshots for printable vouchers. JSONB keeps the
+    // migration minimal and the shape extensible.
+    details: jsonb("details"),
     notes: text("notes"),
     createdBy: integer("created_by").references(() => usersTable.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

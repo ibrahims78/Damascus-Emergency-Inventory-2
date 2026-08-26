@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TransactionDeliveryDestination } from './transactionDeliveryDestination';
+import type { TransactionDetails } from './transactionDetails';
 import type { TransactionItemType } from './transactionItemType';
 import type { TransactionSupplySource } from './transactionSupplySource';
 import type { TransactionType } from './transactionType';
@@ -69,6 +70,11 @@ export interface Transaction {
   /** @nullable */
   reason?: string | null;
   documentNumber: string;
+  /**
+     * Structured movement details (stock before/after, delta, equipment snapshots) — used by adjustment vouchers
+     * @nullable
+     */
+  details?: TransactionDetails;
   /** @nullable */
   notes?: string | null;
   /** @nullable */

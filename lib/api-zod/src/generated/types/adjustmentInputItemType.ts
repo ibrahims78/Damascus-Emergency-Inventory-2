@@ -11,4 +11,5 @@ export type AdjustmentInputItemType = typeof AdjustmentInputItemType[keyof typeo
 
 export const AdjustmentInputItemType = {
   item: 'item',
+  equipment: 'equipment',
 } as const;

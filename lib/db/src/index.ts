@@ -76,8 +76,16 @@ async function initializeDesktopDatabase(): Promise<void> {
       currentSchema.backupCatalogTable &&
       currentSchema.backupRetentionPolicyTable,
   );
-  if (coreSchemaReady && backupSchemaReady) {
-    return;
+  if (coreSchemaReady) {
+    // Additive migration for existing desktop databases (approved plan §2.1):
+    // equipment inventory adjustment snapshot column. Kept idempotent so
+    // every boot is safe on both fresh and existing data directories.
+    await desktopClient.exec(
+      `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS details jsonb;`,
+    );
+    if (backupSchemaReady) {
+      return;
+    }
   }
 
   const schemaPath = process.env.DAMASCUS_SCHEMA_PATH;

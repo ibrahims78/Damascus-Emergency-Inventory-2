@@ -124,6 +124,7 @@ export * from './systemSettingsInput';
 export * from './topItem';
 export * from './transaction';
 export * from './transactionDeliveryDestination';
+export * from './transactionDetails';
 export * from './transactionItemType';
 export * from './transactionListResponse';
 export * from './transactionPrint';

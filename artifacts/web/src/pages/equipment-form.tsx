@@ -9,7 +9,7 @@ import {
   useCreateEquipment,
   useUpdateEquipment,
 } from '@workspace/api-client-react';
-import { ArrowRight, Save, Lock, Wrench, Info } from 'lucide-react';
+import { ArrowRight, Save, Lock, Wrench, Info, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -245,6 +245,9 @@ export function EquipmentForm({ equipmentId }: { equipmentId?: number }) {
     };
 
     if (isEditing) {
+      // Balance is managed exclusively through documented adjustment
+      // movements (approved plan §3); never send quantity on edit.
+      delete (payload as Record<string, unknown>).quantity;
       updateMutation.mutate(
         { id: equipmentId!, data: payload },
         {
@@ -320,17 +323,42 @@ export function EquipmentForm({ equipmentId }: { equipmentId?: number }) {
                       )}
                     </FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={hasSerialNumber ? 1 : undefined}
-                        readOnly={hasSerialNumber}
-                        className={hasSerialNumber ? 'bg-muted cursor-not-allowed' : ''}
-                        {...field}
-                      />
+                      {isEditing ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            value={field.value ?? 1}
+                            readOnly
+                            disabled
+                            className="bg-muted cursor-not-allowed max-w-[140px]"
+                            aria-label="الكمية الحالية (قراءة فقط)"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-900/30"
+                            onClick={() => setLocation(`/equipment/${equipmentId}/adjust`)}
+                          >
+                            <SlidersHorizontal className="h-3.5 w-3.5" />
+                            تسوية جرد
+                          </Button>
+                        </div>
+                      ) : (
+                        <Input
+                          type="number"
+                          min={1}
+                          max={hasSerialNumber ? 1 : undefined}
+                          readOnly={hasSerialNumber}
+                          className={hasSerialNumber ? 'bg-muted cursor-not-allowed' : ''}
+                          {...field}
+                        />
+                      )}
                     </FormControl>
                     <p className="text-xs text-muted-foreground">
-                      {hasSerialNumber
+                      {isEditing
+                        ? 'لا تُعدَّل الكمية من شاشة البيانات — تُغيَّر عبر «تسوية جرد» كسند حركة موثق'
+                        : hasSerialNumber
                         ? 'الرقم التسلسلي يعرّف جهازاً واحداً — الكمية ثابتة عند 1'
                         : 'عدد القطع المتوفرة (للمستلزمات المجمّعة بدون رقم تسلسلي)'}
                     </p>

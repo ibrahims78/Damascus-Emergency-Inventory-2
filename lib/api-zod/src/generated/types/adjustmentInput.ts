@@ -9,9 +9,20 @@ import type { AdjustmentInputItemType } from './adjustmentInputItemType';
 
 export interface AdjustmentInput {
   itemType: AdjustmentInputItemType;
-  itemId: number;
+  /**
+     * Required when itemType is item
+     * @nullable
+     */
+  itemId?: number | null;
+  /**
+     * Required when itemType is equipment
+     * @nullable
+     */
+  equipmentId?: number | null;
   /** @minimum 0 */
   newStock: number;
+  documentDate?: Date;
+  /** @minLength 5 */
   reason: string;
   /** @nullable */
   notes?: string | null;
