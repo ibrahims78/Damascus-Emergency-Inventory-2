@@ -1,0 +1,42 @@
+{
+  "name": "@workspace/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "hello": "tsx ./src/hello.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "phase1:build-boundary": "node ./phase1-build-boundary-smoke.mjs",
+    "phase1:schema-smoke": "node ./phase1-schema-smoke.mjs",
+    "phase123:sync-smoke": "tsx ./phase123-sync-smoke.ts",
+    "phase2:movement-unit": "tsx ./phase2-movement-unit.ts",
+    "phase2:movement-smoke": "tsx ./phase2-movement-smoke.ts",
+    "phase3:inbound-smoke": "tsx ./phase3-inbound-smoke.ts",
+    "phase45:backup-recovery": "tsx ./phase45-backup-recovery.ts",
+    "phase45:db-smoke": "tsx ./phase45-db-smoke.ts",
+    "phase6:backup": "tsx ./phase6-backup-retention.ts",
+    "phase4:consumables-fefo": "tsx ./phase4-consumables-fefo.ts",
+    "phase5:assets-lifecycle": "tsx ./phase5-assets-lifecycle.ts",
+    "phase6:item-history": "tsx ./phase6-item-history-smoke.ts",
+    "phase7:sync": "tsx ./phase7-sync-smoke.ts",
+    "phase8:relay": "tsx ./phase8-relay-smoke.ts",
+    "phase9:conflicts": "tsx ./phase9-conflict-smoke.ts",
+    "phase12:admin-contract": "node ./phase12-admin-contract-smoke.mjs",
+    "phase10:13:portability": "tsx ./phase10-13-portability-smoke.ts",
+    "phase13:migration": "tsx ./phase13-migration-smoke.ts",
+    "phase14:resilience": "tsx ./phase14-resilience-smoke.ts",
+    "migration:baseline-report": "node ./legacy-baseline-report.mjs",
+    "final:acceptance": "pnpm run phase2:movement-unit && pnpm run phase2:movement-smoke && pnpm run phase3:inbound-smoke && pnpm run phase4:consumables-fefo && pnpm run phase5:assets-lifecycle && pnpm run phase6:item-history && pnpm run phase8:acceptance",
+    "phase8:acceptance": "node ./phase8-acceptance-smoke.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:"
+  },
+  "dependencies": {
+    "@workspace/backup-format": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "postgres": "^3.4.9",
+    "xlsx": "^0.18.5"
+  }
+}

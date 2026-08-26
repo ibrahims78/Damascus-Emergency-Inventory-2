@@ -1,0 +1,42 @@
+import { Router } from "express";
+import healthRouter from "./health";
+import authRouter from "./auth";
+import categoriesRouter from "./categories";
+import itemsRouter from "./items";
+import equipmentRouter from "./equipment";
+import transactionsRouter from "./transactions";
+import recipientsRouter from "./recipients";
+import exitReasonsRouter from "./exit-reasons";
+import dashboardRouter from "./dashboard";
+import alertsRouter from "./alerts";
+import reportsRouter from "./reports";
+import usersRouter from "./users";
+import settingsRouter from "./settings";
+import auditRouter from "./audit";
+import backupRouter from "./backup";
+import custodiesRouter from "./custodies";
+import backupsRouter from "./backups";
+import syncRouter from "./sync";
+
+const router = Router();
+
+router.use("/healthz", healthRouter);
+router.use("/auth", authRouter);
+router.use("/categories", categoriesRouter);
+router.use("/items", itemsRouter);
+router.use("/equipment", equipmentRouter);
+router.use("/transactions", transactionsRouter);
+router.use("/recipients", recipientsRouter);
+router.use("/exit-reasons", exitReasonsRouter);
+router.use("/dashboard", dashboardRouter);
+router.use("/alerts", alertsRouter);
+router.use("/reports", reportsRouter);
+router.use("/users", usersRouter);
+router.use("/settings", settingsRouter);
+router.use("/audit", auditRouter);
+router.use("/backup", backupRouter);
+router.use("/custodies", custodiesRouter);
+router.use("/backups", backupsRouter);
+router.use("/sync", syncRouter);
+
+export default router;
