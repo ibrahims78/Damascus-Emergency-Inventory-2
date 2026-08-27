@@ -1,10 +1,11 @@
-CREATE TABLE "users" (
+﻿CREATE TABLE "users" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"username" text NOT NULL,
 	"password_hash" text NOT NULL,
 	"full_name" text NOT NULL,
 	"role" text NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
+	"must_change_password" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "users_username_unique" UNIQUE("username")
 );
@@ -13,7 +14,7 @@ CREATE TABLE "system_settings" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"setup_completed" boolean DEFAULT false NOT NULL,
 	"setup_at" timestamp with time zone,
-	"org_name" text DEFAULT 'منظومة الاحالة و الاسعاف و الطوارئ - دمشق' NOT NULL,
+	"org_name" text DEFAULT 'Ù…Ù†Ø¸ÙˆÙ…Ø© Ø§Ù„Ø§Ø­Ø§Ù„Ø© Ùˆ Ø§Ù„Ø§Ø³Ø¹Ø§Ù Ùˆ Ø§Ù„Ø·ÙˆØ§Ø±Ø¦ - Ø¯Ù…Ø´Ù‚' NOT NULL,
 	"org_subtitle" text,
 	"expiry_alert_days" integer DEFAULT 30 NOT NULL,
 	"units_list" text,
@@ -37,6 +38,8 @@ CREATE TABLE "node_identity" (
 "installation_id" text NOT NULL UNIQUE,
 "node_type" text NOT NULL,
 "key_id" text,
+"signing_public_key" text,
+"signing_private_key" text,
 "origin_sequence" integer DEFAULT 0 NOT NULL,
 "created_at" timestamp with time zone DEFAULT now() NOT NULL,
 "updated_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -162,6 +165,7 @@ CREATE TABLE "sync_trusted_nodes" (
 "node_type" text NOT NULL,
 "label" text,
 "status" text DEFAULT 'trusted' NOT NULL,
+"signing_public_key" text,
 "paired_at" timestamp with time zone DEFAULT now() NOT NULL,
 "revoked_at" timestamp with time zone,
 "last_seen_at" timestamp with time zone
@@ -636,4 +640,10 @@ CREATE TABLE "backup_retention_policy" (
 );
 --> statement-breakpoint
 CREATE INDEX "backup_restore_previews_expires_idx"
-  ON "backup_restore_previews" USING btree ("expires_at");
+  ON "backup_restore_previews" USING btree ("expires_at");--> statement-breakpoint
+CREATE TABLE "auth_rate_limits" (
+	"key" text PRIMARY KEY NOT NULL,
+	"attempts" integer DEFAULT 0 NOT NULL,
+	"reset_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);

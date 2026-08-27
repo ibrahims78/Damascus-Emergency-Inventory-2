@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/form';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { storeCsrfToken } from '@/lib/csrf-client';
 import logoUrl from '@assets/logo.jpeg';
 
 const loginSchema = z.object({
@@ -33,8 +34,17 @@ export function LoginPage() {
   
   const loginMutation = useLogin({
     mutation: {
-      onSuccess: () => {
-        setLocation('/');
+      onSuccess: (data) => {
+        const loginData = data as unknown as {
+          csrfToken?: string;
+          mustChangePassword?: boolean;
+        };
+        storeCsrfToken(loginData.csrfToken ?? null);
+        if (loginData.mustChangePassword) {
+          setLocation('/change-password');
+        } else {
+          setLocation('/');
+        }
       },
       onError: (err: any) => {
         if (err?.response?.status === 401) {

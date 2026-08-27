@@ -28,7 +28,9 @@ export const LoginResponse = zod.object({
   "id": zod.number().int(),
   "username": zod.string(),
   "fullName": zod.string(),
-  "role": zod.enum(['admin', 'warehouse_manager', 'viewer'])
+  "role": zod.enum(['admin', 'warehouse_manager', 'viewer']),
+  "mustChangePassword": zod.boolean().optional(),
+  "csrfToken": zod.string().nullish()
 })
 
 
@@ -59,7 +61,9 @@ export const SetupAdminResponse = zod.object({
   "id": zod.number().int(),
   "username": zod.string(),
   "fullName": zod.string(),
-  "role": zod.enum(['admin', 'warehouse_manager', 'viewer'])
+  "role": zod.enum(['admin', 'warehouse_manager', 'viewer']),
+  "mustChangePassword": zod.boolean().optional(),
+  "csrfToken": zod.string().nullish()
 })
 
 
@@ -70,7 +74,9 @@ export const GetCurrentUserResponse = zod.object({
   "id": zod.number().int(),
   "username": zod.string(),
   "fullName": zod.string(),
-  "role": zod.enum(['admin', 'warehouse_manager', 'viewer'])
+  "role": zod.enum(['admin', 'warehouse_manager', 'viewer']),
+  "mustChangePassword": zod.boolean().optional(),
+  "csrfToken": zod.string().nullish()
 })
 
 

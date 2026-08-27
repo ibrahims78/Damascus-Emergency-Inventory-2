@@ -1,14 +1,17 @@
 import { defineConfig } from "drizzle-kit";
-import path from "path";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL, ensure the database is provisioned");
-}
-
+/**
+ * Production migration pipeline (hosted PostgreSQL).
+ *
+ * Desktop/offline builds keep using the bundled desktop-schema.sql (executed
+ * idempotently at boot); this config drives `drizzle-kit generate` /
+ * `drizzle-kit migrate` for server deployments:
+ *
+ *   pnpm --filter @workspace/db db:generate   # diff schema -> migrations/
+ *   pnpm --filter @workspace/db db:migrate    # apply migrations
+ */
 export default defineConfig({
-  schema: path.join(__dirname, "./src/schema/index.ts"),
   dialect: "postgresql",
-  dbCredentials: {
-    url: process.env.DATABASE_URL,
-  },
+  schema: "./src/schema/index.ts",
+  out: "./migrations",
 });

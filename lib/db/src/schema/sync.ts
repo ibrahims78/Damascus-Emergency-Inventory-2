@@ -58,6 +58,10 @@ export const nodeIdentityTable = pgTable("node_identity", {
   installationId: text("installation_id").notNull().unique(),
   nodeType: text("node_type").notNull().$type<SyncNodeType>(),
   keyId: text("key_id"),
+  // Ed25519 signing keypair for non-repudiation. The private key never leaves
+  // this node; only the public key is shared with trusted peers.
+  signingPublicKey: text("signing_public_key"),
+  signingPrivateKey: text("signing_private_key"),
   originSequence: integer("origin_sequence").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -193,6 +197,7 @@ export const syncTrustedNodeTable = pgTable(
     nodeType: text("node_type").notNull().$type<SyncNodeType>(),
     label: text("label"),
     status: text("status").notNull().$type<"trusted" | "revoked">().default("trusted"),
+    signingPublicKey: text("signing_public_key"),
     pairedAt: timestamp("paired_at", { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),

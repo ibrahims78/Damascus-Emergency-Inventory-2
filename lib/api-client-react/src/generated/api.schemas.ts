@@ -38,6 +38,13 @@ export interface AuthUser {
   username: string;
   fullName: string;
   role: AuthUserRole;
+  mustChangePassword?: boolean;
+  csrfToken?: string | null;
+}
+
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export type UserRole = typeof UserRole[keyof typeof UserRole];
@@ -1118,11 +1125,6 @@ export interface SystemSettingsInput {
   expiryAlertDays?: number;
   /** @nullable */
   unitsList?: string | null;
-}
-
-export interface ChangePasswordInput {
-  currentPassword: string;
-  newPassword: string;
 }
 
 export interface JsonObject { [key: string]: unknown }

@@ -15,6 +15,7 @@ const t = async (name, fn) => {
   }
 };
 
+const ADMIN_PW = process.env.SEED_ADMIN_PASSWORD ?? '***';
 const api = async (path, opts = {}) => {
   const res = await fetch(`${BASE}${path}`, {
     ...opts,
@@ -29,7 +30,7 @@ const api = async (path, opts = {}) => {
 
 // ── login ────────────────────────────────────────────────────────────────────
 await t('login admin', async () => {
-  const r = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username: 'admin', password: 'Admin@1234' }) });
+  const r = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username: 'admin', password: ADMIN_PW }) });
   return r.status === 200 && (r.body?.role === 'admin' || r.body?.user?.role === 'admin') ? true : r;
 });
 

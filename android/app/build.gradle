@@ -19,10 +19,29 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            // The distributable APK is an offline/internal release. Reusing the
-            // debug keystore keeps the artifact installable without requiring a
-            // private signing key in the repository.
-            signingConfig signingConfigs.debug
+            // Signing: prefer a private release keystore when one is
+            // configured (keystore.properties + RELEASE_KEYSTORE_PATH env or
+            // gradle property); otherwise fall back to the debug keystore so
+            // internal builds keep working — and warn loudly, because a debug-
+            // signed APK must never be distributed publicly.
+            def keystorePath = System.getenv('RELEASE_KEYSTORE_PATH')
+            def keystorePass = System.getenv('RELEASE_KEYSTORE_PASSWORD')
+            def keyAlias = System.getenv('RELEASE_KEY_ALIAS')
+            def keyPass = System.getenv('RELEASE_KEY_PASSWORD')
+            if (keystorePath != null && keystorePass != null && keyAlias != null) {
+                signingConfigs {
+                    release {
+                        storeFile file(keystorePath)
+                        storePassword keystorePass
+                        keyAlias keyAlias
+                        keyPassword keyPass != null ? keyPass : keystorePass
+                    }
+                }
+                signingConfig signingConfigs.release
+            } else {
+                println 'WARNING: No release keystore configured (RELEASE_KEYSTORE_PATH etc.) — signing the release APK with the DEBUG key. Do not distribute.'
+                signingConfig signingConfigs.debug
+            }
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }

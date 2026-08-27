@@ -1,7 +1,20 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
+import { db, nodeIdentityTable } from "@workspace/db";
+import { logger } from "../lib/logger";
 import { auditLog } from "../middlewares/audit";
 import { requireAuth, requireRole } from "../middlewares/auth";
+import {
+  ensureNodeSigningKeys,
+  exchangeSigningPayload,
+  getTrustedPublicKey,
+  packageSigningPayload,
+  signPackageBuffer,
+  signPayload,
+  upsertTrustedPublicKey,
+  verifyPayload,
+} from "../lib/sync-signing";
 import {
   acknowledgeSyncPackage,
   applyIncomingChanges,
@@ -33,8 +46,7 @@ import {
   decodePackage,
   packageSummary,
 } from "../lib/backup-service";
-import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { usersTable } from "@workspace/db";
 
 const router = Router();
 
@@ -376,11 +388,12 @@ async function peerFetch<T>(
   url: string,
   username: string,
   password: string,
-  init: { method?: string; body?: unknown } = {},
+  init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+    ...(init.headers ?? {}),
   };
   const response = await fetch(url, {
     method: init.method ?? "GET",
@@ -443,6 +456,26 @@ router.post("/exchange", async (req, res) => {
       );
       // 2) Prepare our changes the peer does not have yet.
       const outgoing = await prepareOutgoingChanges(peerBaseVector(peerNode.vector));
+      // 2b) Sign the request (non-repudiation): the peer verifies it with
+      // our public key once we are a trusted node.
+      const [nodeRow] = await db
+        .select()
+        .from(nodeIdentityTable)
+        .where(eq(nodeIdentityTable.nodeId, local.nodeId))
+        .limit(1);
+      const signingKeys = await ensureNodeSigningKeys(
+        nodeRow ?? { nodeId: local.nodeId, keyId: null, signingPublicKey: null, signingPrivateKey: null },
+      );
+      const signedAt = new Date().toISOString();
+      const requestSignature = signPayload(
+        exchangeSigningPayload({
+          nodeId: local.nodeId,
+          signedAt,
+          vector: local.vector,
+          changeCount: outgoing.length,
+        }),
+        signingKeys.privateKeyPem,
+      );
       // 3) One round trip: send ours, receive theirs.
       const peerResponse = await peerFetch<{
         nodeId: string;
@@ -451,8 +484,17 @@ router.post("/exchange", async (req, res) => {
         report: { counts?: { received?: number; applied?: number; duplicate?: number; conflicts?: number } };
         baseVector?: Record<string, number>;
         lastVector?: Record<string, number>;
+        signingPublicKey?: string;
+        signingKeyId?: string;
+        signature?: string;
+        signedAt?: string;
       }>(`${peerUrl}/api/sync/exchange`, username, password, {
         method: "POST",
+        headers: {
+          "x-dme-node": local.nodeId,
+          "x-dme-signed-at": signedAt,
+          "x-dme-signature": requestSignature,
+        },
         body: {
           nodeId: local.nodeId,
           vector: local.vector,
@@ -460,6 +502,34 @@ router.post("/exchange", async (req, res) => {
           baseVector: peerBaseVector(peerNode.vector),
         },
       });
+      // 2c) Record the peer's signing public key so future exchanges can be
+      // verified, and verify this response when the key was already known.
+      let peerSignatureVerification: "verified" | "unverified" | "invalid" = "unverified";
+      if (typeof peerResponse.signingPublicKey === "string" && peerResponse.signingPublicKey) {
+        await upsertTrustedPublicKey(peerNode.nodeId, peerResponse.signingPublicKey, "web");
+      }
+      const knownPeerKey =
+        typeof peerResponse.signingPublicKey === "string" && peerResponse.signingPublicKey
+          ? peerResponse.signingPublicKey
+          : await getTrustedPublicKey(peerNode.nodeId);
+      if (knownPeerKey && typeof peerResponse.signature === "string" && typeof peerResponse.signedAt === "string") {
+        peerSignatureVerification = verifyPayload(
+          exchangeSigningPayload({
+            nodeId: peerNode.nodeId,
+            signedAt: peerResponse.signedAt,
+            vector: peerBaseVector(peerResponse.vector),
+            changeCount: Array.isArray(peerResponse.changes) ? peerResponse.changes.length : 0,
+          }),
+          peerResponse.signature,
+          knownPeerKey,
+        )
+          ? "verified"
+          : "invalid";
+      }
+      if (peerSignatureVerification === "invalid") {
+        res.status(403).json({ error: "توقيع العقدة النظيرة غير صالح — تحقق من هوية الخادم الهدف" });
+        return;
+      }
       // 4) Materialize the peer's changes locally.
       const localReport = await applyIncomingChanges({
         changes: peerResponse.changes ?? [],
@@ -480,6 +550,7 @@ router.post("/exchange", async (req, res) => {
           localApplied: localReport.counts.applied,
           peerApplied: peerResponse.report?.counts?.applied ?? 0,
           conflicts: localReport.counts.conflicts,
+          peerSignature: peerSignatureVerification,
         },
       });
       res.json({
@@ -488,6 +559,7 @@ router.post("/exchange", async (req, res) => {
         received: (peerResponse.changes ?? []).length,
         local: localReport,
         peerReport: peerResponse.report ?? peerResponse,
+        peerSignature: peerSignatureVerification,
       });
       return;
     }
@@ -508,6 +580,36 @@ router.post("/exchange", async (req, res) => {
       res.status(400).json({ error: "nodeId الخاص بالطرف الآخر مطلوب" });
       return;
     }
+    // Verify the caller's signature when we hold its public key. A mismatch
+    // means either a compromised credential or an impersonation attempt.
+    const trustedKey = await getTrustedPublicKey(peerNodeId);
+    const incomingSignedAt = req.headers["x-dme-signed-at"];
+    const incomingSignature = req.headers["x-dme-signature"];
+    if (trustedKey) {
+      const valid =
+        typeof incomingSignedAt === "string" &&
+        typeof incomingSignature === "string" &&
+        verifyPayload(
+          exchangeSigningPayload({
+            nodeId: peerNodeId,
+            signedAt: incomingSignedAt,
+            vector: peerBaseVector(body.vector),
+            changeCount: Array.isArray(body.changes) ? body.changes.length : 0,
+          }),
+          incomingSignature,
+          trustedKey,
+        );
+      if (!valid) {
+        await auditLog({
+          req,
+          action: "sync_exchange_rejected_signature",
+          entityType: "sync_exchange",
+          details: { peerNodeId },
+        });
+        res.status(403).json({ error: "توقيع العقدة غير صالح" });
+        return;
+      }
+    }
     const report = await applyIncomingChanges({
       changes: body.changes ?? [],
       baseVector: peerBaseVector(body.baseVector),
@@ -517,6 +619,26 @@ router.post("/exchange", async (req, res) => {
     });
     const outgoing = await prepareOutgoingChanges(peerBaseVector(body.vector));
     const vector = await currentVector();
+    // Sign the response with our own keypair so the orchestrator can verify
+    // provenance once it holds our public key.
+    const [peerNodeRow] = await db
+      .select()
+      .from(nodeIdentityTable)
+      .where(eq(nodeIdentityTable.nodeId, local.nodeId))
+      .limit(1);
+    const peerSigningKeys = await ensureNodeSigningKeys(
+      peerNodeRow ?? { nodeId: local.nodeId, keyId: null, signingPublicKey: null, signingPrivateKey: null },
+    );
+    const peerSignedAt = new Date().toISOString();
+    const peerSignature = signPayload(
+      exchangeSigningPayload({
+        nodeId: local.nodeId,
+        signedAt: peerSignedAt,
+        vector,
+        changeCount: outgoing.length,
+      }),
+      peerSigningKeys.privateKeyPem,
+    );
     res.json({
       nodeId: local.nodeId,
       vector,
@@ -524,6 +646,10 @@ router.post("/exchange", async (req, res) => {
       report,
       baseVector: report.baseVector,
       lastVector: report.lastVector,
+      signingKeyId: peerSigningKeys.keyId,
+      signingPublicKey: peerSigningKeys.publicKeyPem,
+      signature: peerSignature,
+      signedAt: peerSignedAt,
     });
   } catch (error) {
     res.status(400).json({ error: errorMessage(error) });
@@ -544,9 +670,29 @@ router.post("/export", async (req, res) => {
         ? peerBaseVector(req.body.baseVector)
         : undefined;
     const hasBase = baseVector && Object.keys(baseVector).length > 0;
-    const buffer = hasBase
+    let buffer = hasBase
       ? await createDeltaBackup(password, baseVector)
       : await createFullBackup(password);
+    // Sign the envelope (non-repudiation): the signature is added to the
+    // plaintext header without re-encrypting the payload.
+    try {
+      const nodeRow = await getSyncNode();
+      const [signingNodeRow] = await db
+        .select()
+        .from(nodeIdentityTable)
+        .where(eq(nodeIdentityTable.nodeId, nodeRow.nodeId))
+        .limit(1);
+      const signingKeys = await ensureNodeSigningKeys(
+        signingNodeRow ?? { nodeId: nodeRow.nodeId, keyId: null, signingPublicKey: null, signingPrivateKey: null },
+      );
+      buffer = signPackageBuffer(buffer, {
+        keys: signingKeys,
+        nodeId: nodeRow.nodeId,
+        packageType: hasBase ? "delta-sync" : "full-backup",
+      });
+    } catch (signingError) {
+      logger.warn({ error: signingError }, "Could not sign sync package; exporting unsigned");
+    }
     const date = new Date().toISOString().slice(0, 10);
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader(
@@ -579,6 +725,27 @@ router.post("/import", async (req, res) => {
     const pkg = decodePackage(packageBase64, password);
     const manifest = pkg.manifest as Record<string, unknown>;
     const changes = (pkg.changes ?? []) as unknown[];
+    // Verify the package signature when present (forward compatible: legacy
+    // unsigned packages are accepted and reported as unverified).
+    let signatureVerification: "verified" | "unverified" | "invalid" = "unverified";
+    const signatureInfo = (pkg as { signatureInfo?: { signature?: string; checksum?: string; signingPublicKey?: string } }).signatureInfo;
+    if (signatureInfo?.signature && signatureInfo.signingPublicKey) {
+      const payload = packageSigningPayload(
+        String(signatureInfo.checksum ?? ""),
+        String(manifest.packageType ?? "full-backup"),
+      );
+      signatureVerification = verifyPayload(
+        payload,
+        signatureInfo.signature,
+        signatureInfo.signingPublicKey,
+      )
+        ? "verified"
+        : "invalid";
+      if (signatureVerification === "invalid") {
+        res.status(400).json({ error: "توقيع الحزمة غير صالح — رفض الاستيراد" });
+        return;
+      }
+    }
     const baseVector = peerBaseVector(
       (pkg as { baseVector?: unknown }).baseVector ??
         (manifest.baseVector ?? (manifest as { lastVector?: unknown }).lastVector ?? {}),
@@ -600,7 +767,7 @@ router.post("/import", async (req, res) => {
         entityType: "sync_package",
         details: { packageType: manifest.packageType, report: report.counts },
       });
-      res.json({ mode: "sync-apply", report, summary: packageSummary(pkg) });
+      res.json({ mode: "sync-apply", report, summary: packageSummary(pkg), signatureVerification });
       return;
     }
     // Records-only package (legacy backup) → merge restore.
@@ -611,7 +778,7 @@ router.post("/import", async (req, res) => {
       entityType: "sync_package",
       details: { packageType: manifest.packageType, report: report.counts },
     });
-    res.json({ mode: "merge-restore", report, summary: packageSummary(pkg) });
+    res.json({ mode: "merge-restore", report, summary: packageSummary(pkg), signatureVerification });
   } catch (error) {
     res.status(400).json({ error: errorMessage(error) });
   }

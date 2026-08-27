@@ -1,6 +1,7 @@
 // End-to-end sync tests: two live desktop instances (A:8080, B:8081).
 // Run: node api-sync-tests.mjs
 // Requires both servers running with separate PGlite data dirs.
+const ADMIN_PW = process.env.SEED_ADMIN_PASSWORD ?? '***';
 const A = process.env.SYNC_A || 'http://127.0.0.1:8080';
 const B = process.env.SYNC_B || 'http://127.0.0.1:8081';
 const PASSWORD = 'SyncTest!2026';
@@ -34,7 +35,7 @@ function makeClient(base) {
       return { status: res.status, body, headers: res.headers };
     },
     async login() {
-      const r = await this.api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username: 'admin', password: 'Admin@1234' }) });
+      const r = await this.api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username: 'admin', password: ADMIN_PW }) });
       return r.status === 200 ? true : r;
     },
   };
@@ -111,7 +112,7 @@ await t('B creates equipment (stock 2)', async () => {
 // ── 4. First exchange (A orchestrates one round trip) ─────────────────────
 let exchange1;
 await t('exchange #1 A→B', async () => {
-  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: 'Admin@1234' }) });
+  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: ADMIN_PW }) });
   if (r.status !== 200) return r;
   exchange1 = r.body;
   if (r.body.sent < 2) return { sent: r.body.sent };
@@ -152,7 +153,7 @@ await t('B: inbound +7', async () => {
 
 let exchange2;
 await t('exchange #2 (movements)', async () => {
-  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: 'Admin@1234' }) });
+  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: ADMIN_PW }) });
   if (r.status !== 200) return r;
   exchange2 = r.body;
   return true;
@@ -194,7 +195,7 @@ await t('A: equipment inbound +1', async () => {
 });
 let exchange3;
 await t('exchange #3 (equipment movement)', async () => {
-  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: 'Admin@1234' }) });
+  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: ADMIN_PW }) });
   if (r.status !== 200) return r;
   exchange3 = r.body;
   return true;
@@ -222,7 +223,7 @@ await t('conflict count on A before exchange #4', async () => {
 });
 let exchange4;
 await t('exchange #4 (conflict expected)', async () => {
-  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: 'Admin@1234' }) });
+  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: ADMIN_PW }) });
   if (r.status !== 200) return r;
   exchange4 = r.body;
   return true;
@@ -247,7 +248,7 @@ await t('resolved conflict excluded from future packages', async () => {
   return resolved.some((c) => c.id === conflictId) ? true : { resolved: resolved.map((c) => c.id) };
 });
 await t('exchange #5 after rejection: no re-import storm', async () => {
-  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: 'Admin@1234' }) });
+  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: ADMIN_PW }) });
   if (r.status !== 200) return r;
   return true;
 });
@@ -308,7 +309,7 @@ await t('A renames shared item', async () => {
 });
 let exchange6;
 await t('exchange #6 (rename propagates)', async () => {
-  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: 'Admin@1234' }) });
+  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: ADMIN_PW }) });
   if (r.status !== 200) return r;
   exchange6 = r.body;
   return true;
@@ -328,7 +329,7 @@ await t('A soft-deletes the delta item', async () => {
 });
 let exchange7;
 await t('exchange #7 (delete propagates)', async () => {
-  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: 'Admin@1234' }) });
+  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: ADMIN_PW }) });
   if (r.status !== 200) return r;
   exchange7 = r.body;
   return true;

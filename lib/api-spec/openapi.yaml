@@ -1796,6 +1796,20 @@ components:
         role:
           type: string
           enum: [admin, warehouse_manager, viewer]
+        mustChangePassword:
+          type: boolean
+        csrfToken:
+          type: string
+          nullable: true
+
+    ChangePasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
 
     User:
       type: object
@@ -2992,15 +3006,6 @@ components:
           type: integer
         unitsList:
           type: ["string", "null"]
-
-    ChangePasswordInput:
-      type: object
-      required: [currentPassword, newPassword]
-      properties:
-        currentPassword:
-          type: string
-        newPassword:
-          type: string
 
     JsonObject:
       type: object

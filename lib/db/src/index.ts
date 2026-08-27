@@ -99,6 +99,23 @@ async function initializeDesktopDatabase(): Promise<void> {
     await desktopClient.exec(
       `CREATE TABLE IF NOT EXISTS sync_relay_packages ("relay_id" text PRIMARY KEY NOT NULL, "session_id" text NOT NULL, "package_id" text NOT NULL, "response_to_relay_id" text, "direction" text NOT NULL, "source_node_id" text NOT NULL, "target_node_id" text NOT NULL, "content_hash" text NOT NULL, "transport_hash" text NOT NULL, "payload" text NOT NULL, "status" text DEFAULT 'available' NOT NULL, "expires_at" timestamp with time zone NOT NULL, "downloaded_at" timestamp with time zone, "created_at" timestamp with time zone DEFAULT now() NOT NULL, CONSTRAINT "sync_relay_session_transport_unique" UNIQUE("session_id", "transport_hash"));`,
     );
+    // Security hardening additions (2026-08): must-change-password flag,
+    // Ed25519 sync signing keys, and the persistent rate-limit table.
+    await desktopClient.exec(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false;`,
+    );
+    await desktopClient.exec(
+      `ALTER TABLE node_identity ADD COLUMN IF NOT EXISTS signing_public_key text;`,
+    );
+    await desktopClient.exec(
+      `ALTER TABLE node_identity ADD COLUMN IF NOT EXISTS signing_private_key text;`,
+    );
+    await desktopClient.exec(
+      `ALTER TABLE sync_trusted_nodes ADD COLUMN IF NOT EXISTS signing_public_key text;`,
+    );
+    await desktopClient.exec(
+      `CREATE TABLE IF NOT EXISTS auth_rate_limits ("key" text PRIMARY KEY NOT NULL, "attempts" integer DEFAULT 0 NOT NULL, "reset_at" timestamp with time zone NOT NULL, "updated_at" timestamp with time zone DEFAULT now() NOT NULL);`,
+    );
     if (backupSchemaReady) {
       return;
     }

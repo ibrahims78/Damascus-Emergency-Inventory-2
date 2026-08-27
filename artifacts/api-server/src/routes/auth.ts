@@ -1,17 +1,20 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { db, usersTable, systemSettingsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { auditLog } from "../middlewares/audit";
 import { eq } from "drizzle-orm";
 import { getPasswordPolicyError } from "../lib/password-policy";
+import {
+  checkRateLimit,
+  recordAuthAttempt,
+  resetAuthAttempts,
+} from "../lib/rate-limit";
 
 const router = Router();
 
-// ── Simple in-memory rate limiter for auth endpoints ─────────────────────────
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_ATTEMPTS = 10;
+const BCRYPT_ROUNDS = 12;
 
 function saveSession(req: Request) {
   return new Promise<void>((resolve, reject) => {
@@ -19,29 +22,25 @@ function saveSession(req: Request) {
   });
 }
 
-function loginRateLimiter(req: Request, res: Response, next: NextFunction) {
+// DB-backed rate limiter: counters survive restarts and are shared across
+// instances pointing at the same database (see lib/rate-limit.ts).
+async function loginRateLimiter(req: Request, res: Response, next: NextFunction) {
   const key = String(req.ip ?? "unknown");
-  const now = Date.now();
-  const entry = loginAttempts.get(key);
-  if (entry && now < entry.resetAt) {
-    if (entry.count >= MAX_ATTEMPTS) {
-      res.status(429).json({ error: "Too many attempts. Please try again later." });
-      return;
-    }
-    entry.count++;
-  } else {
-    loginAttempts.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
+  const { allowed, retryAfterSeconds } = await checkRateLimit(key);
+  if (!allowed) {
+    res.set("Retry-After", String(retryAfterSeconds ?? 60));
+    res.status(429).json({ error: "Too many attempts. Please try again later." });
+    return;
   }
+  res.locals.rateLimitKey = key;
   next();
 }
 
-// Clean stale entries periodically (every 30 min)
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of loginAttempts.entries()) {
-    if (now >= v.resetAt) loginAttempts.delete(k);
-  }
-}, 30 * 60 * 1000).unref();
+function issueCsrfToken(req: Request) {
+  const token = randomUUID();
+  req.session.csrfToken = token;
+  return token;
+}
 
 // GET /api/auth/setup-status
 router.get("/setup-status", async (_req, res) => {
@@ -83,10 +82,10 @@ router.post("/setup", loginRateLimiter, async (req, res) => {
       res.status(400).json({ error: passwordError });
       return;
     }
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const [user] = await db
       .insert(usersTable)
-      .values({ username, passwordHash, fullName, role: "admin" })
+      .values({ username, passwordHash, fullName, role: "admin", mustChangePassword: false })
       .returning();
 
     // Mark setup as completed in system settings
@@ -105,8 +104,9 @@ router.post("/setup", loginRateLimiter, async (req, res) => {
       req.session.regenerate((err) => (err ? reject(err) : resolve()))
     );
     req.session.userId = user.id;
+    const csrfToken = issueCsrfToken(req);
     await saveSession(req);
-    res.json({ id: user.id, username: user.username, fullName: user.fullName, role: user.role });
+    res.json({ id: user.id, username: user.username, fullName: user.fullName, role: user.role, mustChangePassword: false, csrfToken });
   } catch (err: any) {
     if (err?.code === "23505") {
       res.status(409).json({ error: "Username already taken" });
@@ -129,19 +129,23 @@ router.post("/login", loginRateLimiter, async (req, res) => {
       where: (u, { eq, and }) => and(eq(u.username, username), eq(u.isActive, true)),
     });
     if (!user) {
+      await recordAuthAttempt(String(res.locals.rateLimitKey ?? req.ip ?? "unknown"));
       res.status(401).json({ error: "Invalid credentials" });
       return;
     }
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
+      await recordAuthAttempt(String(res.locals.rateLimitKey ?? req.ip ?? "unknown"));
       res.status(401).json({ error: "Invalid credentials" });
       return;
     }
+    await resetAuthAttempts(String(res.locals.rateLimitKey ?? req.ip ?? "unknown"));
     // Regenerate session to prevent session fixation
     await new Promise<void>((resolve, reject) =>
       req.session.regenerate((err) => (err ? reject(err) : resolve()))
     );
     req.session.userId = user.id;
+    const csrfToken = issueCsrfToken(req);
     await saveSession(req);
     await auditLog({ req, action: "login", entityType: "user", entityId: user.id, details: { username: user.username } });
     res.json({
@@ -149,6 +153,8 @@ router.post("/login", loginRateLimiter, async (req, res) => {
       username: user.username,
       fullName: user.fullName,
       role: user.role,
+      mustChangePassword: user.mustChangePassword,
+      csrfToken,
     });
   } catch (err) {
     console.error(err);
@@ -185,6 +191,8 @@ router.get("/me", requireAuth, (req, res) => {
     username: user.username,
     fullName: user.fullName,
     role: user.role,
+    mustChangePassword: user.mustChangePassword,
+    csrfToken: req.session.csrfToken ?? null,
   });
 });
 

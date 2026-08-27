@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { useGetCurrentUser } from '@workspace/api-client-react';
+import { storeCsrfToken } from '@/lib/csrf-client';
 
 // Layout
 import { Shell } from '@/components/layout/shell';
@@ -13,6 +14,7 @@ import { Shell } from '@/components/layout/shell';
 import NotFound from '@/pages/not-found';
 import { LoginPage } from '@/pages/login';
 import { SetupPage } from '@/pages/setup';
+import { ChangePasswordPage } from '@/pages/change-password';
 import { DashboardPage } from '@/pages/dashboard';
 import { ItemsPage } from '@/pages/items';
 import { EquipmentPage } from '@/pages/equipment';
@@ -53,10 +55,20 @@ function ProtectedRoute({
   const [location, setLocation] = useLocation();
   const { data: user, isLoading, isError } = useGetCurrentUser();
 
+  // Keep the CSRF token available to the fetch wrapper (issued at login and
+  // refreshed on every /me round trip).
+  useEffect(() => {
+    storeCsrfToken((user as { csrfToken?: string } | undefined)?.csrfToken ?? null);
+  }, [user]);
+
   // Must be called unconditionally before any early returns
   useEffect(() => {
     if (!isLoading && (isError || !user) && location !== '/login') {
       setLocation('/login');
+    }
+    const current = user as { mustChangePassword?: boolean } | undefined;
+    if (!isLoading && user && current?.mustChangePassword && location !== '/change-password') {
+      setLocation('/change-password');
     }
   }, [isLoading, isError, user, location, setLocation]);
 
@@ -122,6 +134,7 @@ function Router() {
       <Route path="/users"><ProtectedRoute component={UsersPage} adminOnly /></Route>
       <Route path="/audit"><ProtectedRoute component={AuditPage} adminOnly /></Route>
       <Route path="/sync"><ProtectedRoute component={SyncPage} adminOnly /></Route>
+      <Route path="/change-password"><ProtectedRoute component={ChangePasswordPage} /></Route>
       <Route path="/settings"><ProtectedRoute component={SettingsPage} /></Route>
 
       {/* Print Route (No shell) */}

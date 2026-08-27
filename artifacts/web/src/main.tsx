@@ -5,7 +5,12 @@ import App from './App';
 import './index.css';
 
 import { installOfflineApi } from './lib/offline-api';
+import { installCsrfClient } from './lib/csrf-client';
 import { ProtectedBuildGate } from './components/protected-build-gate';
+
+// Install the CSRF header injector first so the offline wrapper (which
+// replaces window.fetch for /api/* in offline mode) chains on top of it.
+installCsrfClient();
 
 if (import.meta.env.VITE_OFFLINE_MODE === '1') {
   installOfflineApi();

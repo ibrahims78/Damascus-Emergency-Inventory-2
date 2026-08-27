@@ -67,6 +67,13 @@ export type SyncPackage = {
   records: SyncRecord[];
   changes: SyncChange[];
   packageHash: string;
+  signatureInfo?: {
+    signature: string;
+    checksum?: string | null;
+    signingNodeId?: string | null;
+    signingKeyId?: string | null;
+    signingPublicKey?: string | null;
+  };
 };
 
 type PackageHeader = {
@@ -77,6 +84,13 @@ type PackageHeader = {
   checksum: string;
   mac: string;
   ciphertext: string;
+  // Optional Ed25519 signature (non-repudiation). Signed over the checksum;
+  // lives in the plaintext envelope so it can be added/verified without
+  // touching the ciphertext. Unknown to older readers, which ignore it.
+  signature?: string;
+  signingNodeId?: string;
+  signingKeyId?: string;
+  signingPublicKey?: string;
 };
 
 export class SyncPackageError extends Error {
@@ -302,7 +316,17 @@ export function readSyncPackage(
     const compressed = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     const parsed = parsePlaintext(gunzipSync(compressed));
     const packageHash = createHash("sha256").update(input).digest("hex");
-    return { ...parsed, packageHash };
+    const signatureInfo =
+      header.signature && header.signingPublicKey
+        ? {
+            signature: header.signature,
+            checksum: header.checksum,
+            signingNodeId: header.signingNodeId ?? null,
+            signingKeyId: header.signingKeyId ?? null,
+            signingPublicKey: header.signingPublicKey,
+          }
+        : undefined;
+    return { ...parsed, packageHash, ...(signatureInfo ? { signatureInfo } : {}) };
   } catch (error) {
     if (error instanceof SyncPackageError) throw error;
     fail("The package could not be decrypted or decompressed", "INTEGRITY_ERROR");

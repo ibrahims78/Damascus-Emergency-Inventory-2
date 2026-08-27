@@ -295,8 +295,11 @@ router.post("/change-password", requireAuth, async (req, res) => {
       res.status(401).json({ error: "كلمة المرور الحالية غير صحيحة" });
       return;
     }
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-    await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, user.id));
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await db
+      .update(usersTable)
+      .set({ passwordHash, mustChangePassword: false })
+      .where(eq(usersTable.id, user.id));
     await auditLog({ req, action: "update", entityType: "user", entityId: user.id, details: { action: "password_changed" } });
     res.json({ ok: true });
   } catch (err) {

@@ -669,10 +669,51 @@ function roleAllowed(user: PublicUser, roles: PublicUser['role'][]) {
   return roles.includes(user.role);
 }
 
-async function passwordHash(password: string, salt: string) {
-  const bytes = new TextEncoder().encode(`${salt}:${password}`);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('');
+const PBKDF2_ITERATIONS = 310_000;
+
+function toHex(value: Uint8Array) {
+  return Array.from(value, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+// PBKDF2-SHA-256 (310k iterations) replaces the previous single-round
+// SHA-256(salt:password), which was trivially fast to brute-force on GPU.
+// Hashes are stored as `pbkdf2$<iterations>$<hex>` so parameters can be
+// raised later without breaking old entries.
+export async function passwordHash(password: string, salt: string): Promise<string> {
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: new TextEncoder().encode(salt),
+      iterations: PBKDF2_ITERATIONS,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    256,
+  );
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${toHex(new Uint8Array(bits))}`;
+}
+
+export async function verifyPassword(
+  password: string,
+  salt: string,
+  storedHash: string,
+): Promise<boolean> {
+  if (storedHash.startsWith('pbkdf2$')) {
+    return (await passwordHash(password, salt)) === storedHash;
+  }
+  // Legacy single-round SHA-256(salt:password).
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`${salt}:${password}`),
+  );
+  return toHex(new Uint8Array(digest)) === storedHash;
 }
 
 function itemWithCategory(state: OfflineState, item: Record<string, unknown>): Record<string, unknown> {
@@ -804,8 +845,12 @@ async function route(pathname: string, searchParams: URLSearchParams, method: st
     const body = readBody(init);
     return mutate(async (state) => {
       const user = state.users.find((entry) => entry.username === text(body.username) && entry.isActive);
-      if (!user || (await passwordHash(text(body.password), user.passwordSalt)) !== user.passwordHash) {
+      if (!user || !(await verifyPassword(text(body.password), user.passwordSalt, user.passwordHash))) {
         return failure(401, 'اسم المستخدم أو كلمة المرور غير صحيحة');
+      }
+      // Upgrade legacy SHA-256 hashes to PBKDF2 on successful login.
+      if (!user.passwordHash.startsWith('pbkdf2$')) {
+        user.passwordHash = await passwordHash(text(body.password), user.passwordSalt);
       }
       state.currentUserId = user.id;
       return json(publicUser(user));

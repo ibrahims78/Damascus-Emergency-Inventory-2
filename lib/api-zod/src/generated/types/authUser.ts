@@ -12,4 +12,6 @@ export interface AuthUser {
   username: string;
   fullName: string;
   role: AuthUserRole;
+  mustChangePassword?: boolean;
+  csrfToken?: string | null;
 }

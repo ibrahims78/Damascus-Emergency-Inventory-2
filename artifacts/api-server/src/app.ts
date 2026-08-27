@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import pinoHttp from "pino-http";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -7,6 +8,7 @@ import { desktopMode, pool } from "@workspace/db";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { startAlertWorker } from "./lib/alert-worker";
+import { csrfProtect } from "./lib/csrf";
 import "./types/session.d.ts";
 
 // ── Enforce SESSION_SECRET in production ─────────────────────────────────────
@@ -19,6 +21,32 @@ if (!sessionSecret && process.env.NODE_ENV === "production") {
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+// Security headers (helmet). CSP keeps the SPA fully functional (inline
+// styles are required by React/Radix; ws/wss for HMR and SSE) while blocking
+// foreign script/frame sources. upgrade-insecure-requests stays off because
+// the Electron desktop build serves over loopback HTTP.
+app.use(
+  helmet({
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:"],
+        fontSrc: ["'self'", "data:"],
+        connectSrc: ["'self'", "ws:", "wss:"],
+        workerSrc: ["'self'", "blob:"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        upgradeInsecureRequests: null,
+      },
+    },
+  }),
+);
 
 app.use(
   pinoHttp({
@@ -56,8 +84,22 @@ app.use(
   }),
 );
 
-app.use(express.json({ limit: "64mb" }));
-app.use(express.urlencoded({ extended: true, limit: "4mb" }));
+// Large JSON bodies are only accepted where they are legitimately needed
+// (encrypted package uploads and bulk imports). Everything else is capped at
+// 2 MB so oversized requests cannot be used to exhaust server memory.
+app.use(
+  [
+    "/api/backups",
+    "/api/backup",
+    "/api/sync/import",
+    "/api/sync/exchange",
+    "/api/items/bulk-import",
+    "/api/equipment/bulk-import",
+  ],
+  express.json({ limit: "64mb" }),
+);
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 const PgSession = connectPgSimple(session);
 const sessionStore = desktopMode
@@ -74,19 +116,25 @@ app.use(
     secret: sessionSecret || "fallback-dev-secret-change-in-prod",
     resave: false,
     saveUninitialized: false,
+    rolling: true,
     cookie: {
       // The embedded Electron API is served over loopback HTTP. A Secure
       // cookie would be rejected by Chromium there, which makes setup/login
       // appear successful while every subsequent protected request is 401.
       secure: process.env.NODE_ENV === "production" && !desktopMode,
       httpOnly: true,
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      // Strict (was lax): with the synchronizer-token CSRF protection in
+      // place, strict SameSite closes the remaining cross-site cookie
+      // leaks without breaking same-origin SPA usage.
+      sameSite: "strict",
+      // 24h with sliding renewal (rolling: true) instead of a static 7-day
+      // session, matching the sensitivity of a medical inventory system.
+      maxAge: 24 * 60 * 60 * 1000,
     },
   }),
 );
 
-app.use("/api", router);
+app.use("/api", csrfProtect, router);
 
 // Start background alert worker (checks inventory every 2 h, runs once on boot)
 startAlertWorker();
