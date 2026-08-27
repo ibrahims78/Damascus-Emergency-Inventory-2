@@ -50,7 +50,7 @@ router.post("/", requireAuth, requireRole("admin"), async (req, res) => {
         localEntityId: category.id,
         globalId,
         changeType: "create",
-        payload: { name: category.name, type: category.type },
+        payload: { id: category.id, name: category.name, type: category.type, createdAt: category.createdAt },
       });
       return category;
     });
@@ -101,7 +101,7 @@ router.put("/:id", requireAuth, requireRole("admin"), async (req, res) => {
         localEntityId: category.id,
         globalId,
         changeType: "update",
-        payload: { name: category.name, type: category.type },
+        payload: { id: category.id, name: category.name, type: category.type, createdAt: category.createdAt },
       });
       return category;
     });
@@ -146,7 +146,7 @@ router.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {
         localEntityId: category.id,
         globalId,
         changeType: "delete",
-        payload: { name: category.name, type: category.type },
+        payload: { id: category.id, name: category.name, type: category.type, createdAt: category.createdAt },
       });
       return category;
     });

@@ -5,6 +5,11 @@ import { auditLog } from "../middlewares/audit";
 import { runAlertWorker } from "../lib/alert-worker";
 import { getEquipmentHistory } from "../lib/equipment-history-service";
 import { eq, and, ilike, or, sql, isNotNull } from "drizzle-orm";
+import {
+  ensureEntityIdentity,
+  ensureNodeIdentity,
+  recordLocalChange,
+} from "../lib/sync-service";
 
 const router = Router();
 
@@ -118,25 +123,39 @@ router.post(
         return;
       }
 
-      const [eq_] = await db
-        .insert(equipmentTable)
-        .values({
-          name,
-          equipmentType: equipmentType || null,
-          model: model || null,
-          serialNumber: sn,
-          condition,
-          manufactureYear: manufactureYear ? parseInt(manufactureYear, 10) : null,
-          originCountry: originCountry || null,
-          currentHolder: currentHolder || null,
-          notes: notes || null,
-          quantity: finalQty,
-          minQuantity: isNaN(minQty) || minQty < 0 ? 0 : minQty,
-          maintenanceSentAt: maintenanceSentAt || null,
-          maintenanceReturnedAt: maintenanceReturnedAt || null,
-          maintenanceNotes: maintenanceNotes || null,
-        })
-        .returning();
+      const node = await ensureNodeIdentity("web");
+      const eq_ = await db
+        .transaction(async (tx) => {
+          const [inserted] = await tx
+            .insert(equipmentTable)
+            .values({
+              name,
+              equipmentType: equipmentType || null,
+              model: model || null,
+              serialNumber: sn,
+              condition,
+              manufactureYear: manufactureYear ? parseInt(manufactureYear, 10) : null,
+              originCountry: originCountry || null,
+              currentHolder: currentHolder || null,
+              notes: notes || null,
+              quantity: finalQty,
+              minQuantity: isNaN(minQty) || minQty < 0 ? 0 : minQty,
+              maintenanceSentAt: maintenanceSentAt || null,
+              maintenanceReturnedAt: maintenanceReturnedAt || null,
+              maintenanceNotes: maintenanceNotes || null,
+            })
+            .returning();
+          const globalId = await ensureEntityIdentity(tx, "equipment", inserted.id);
+          await recordLocalChange(tx, {
+            nodeId: node.nodeId,
+            entityType: "equipment",
+            localEntityId: inserted.id,
+            globalId,
+            changeType: "create",
+            payload: { ...inserted },
+          });
+          return inserted;
+        });
       await auditLog({
         req,
         action: "create",
@@ -444,11 +463,26 @@ router.put(
         }
       }
 
-      const [eq_] = await db
-        .update(equipmentTable)
-        .set({ ...updates, updatedAt: new Date() })
-        .where(eq(equipmentTable.id, id))
-        .returning();
+      const node = await ensureNodeIdentity("web");
+      const eq_ = await db
+        .transaction(async (tx) => {
+          const [updated] = await tx
+            .update(equipmentTable)
+            .set({ ...updates, updatedAt: new Date() })
+            .where(eq(equipmentTable.id, id))
+            .returning();
+          if (!updated) return undefined;
+          const globalId = await ensureEntityIdentity(tx, "equipment", updated.id);
+          await recordLocalChange(tx, {
+            nodeId: node.nodeId,
+            entityType: "equipment",
+            localEntityId: updated.id,
+            globalId,
+            changeType: "update",
+            payload: { ...updated },
+          });
+          return updated;
+        });
 
       if (!eq_) {
         res.status(404).json({ error: "Equipment not found" });
@@ -487,10 +521,24 @@ router.delete(
   async (req, res) => {
     try {
       const id = parseInt(String(req.params.id), 10);
-      const [deleted] = await db
-        .delete(equipmentTable)
-        .where(eq(equipmentTable.id, id))
-        .returning({ id: equipmentTable.id, name: equipmentTable.name });
+      const node = await ensureNodeIdentity("web");
+      const deleted = await db.transaction(async (tx) => {
+        const [removed] = await tx
+          .delete(equipmentTable)
+          .where(eq(equipmentTable.id, id))
+          .returning();
+        if (!removed) return undefined;
+        const globalId = await ensureEntityIdentity(tx, "equipment", removed.id);
+        await recordLocalChange(tx, {
+          nodeId: node.nodeId,
+          entityType: "equipment",
+          localEntityId: removed.id,
+          globalId,
+          changeType: "delete",
+          payload: { ...removed },
+        });
+        return removed;
+      });
 
       if (!deleted) {
         res.status(404).json({ error: "التجهيز غير موجود" });

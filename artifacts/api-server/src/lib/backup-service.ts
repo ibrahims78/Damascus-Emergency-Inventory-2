@@ -126,7 +126,12 @@ export async function collectBackupRecords(executor: QueryExecutor = db): Promis
 }
 
 async function collectChanges(executor: QueryExecutor = db) {
-  const rows = await queryRows(executor, "sync_change_log", "origin_sequence");
+  const result = await executor.execute(
+    sql.raw(
+      `SELECT * FROM "sync_change_log" WHERE "status" != 'rejected' ORDER BY "origin_sequence"`,
+    ),
+  );
+  const rows = rowsFromResult(result);
   return rows.map((row) => ({
     changeId: String(row.change_id),
     operationId: String(row.operation_id),
@@ -138,6 +143,7 @@ async function collectChanges(executor: QueryExecutor = db) {
     originNodeId: String(row.origin_node_id),
     originSequence: Number(row.origin_sequence),
     parentRevision: row.parent_revision == null ? null : String(row.parent_revision),
+    status: row.status == null ? undefined : String(row.status),
     createdAt: row.created_at == null ? undefined : new Date(String(row.created_at)).toISOString(),
   }));
 }

@@ -5,6 +5,7 @@ import {
   syncConflictTable,
 } from "@workspace/db";
 import { ensureNodeIdentity, recordLocalChange } from "./sync-service";
+import { materializeSingleChange } from "./sync-apply-service";
 
 export async function listSyncConflicts(status: "open" | "resolved" | "deferred" | "all" = "open") {
   const rows = await db
@@ -37,10 +38,39 @@ export async function resolveSyncConflict(input: {
       .limit(1);
     if (!row) throw new Error("SYNC_CONFLICT_NOT_FOUND");
     if (row.conflict.status === "resolved") return row.conflict;
+    if (!row.change) throw new Error("SYNC_CONFLICT_CHANGE_NOT_FOUND");
 
     let resolution = input.resolution;
-    if (input.resolution === "correct") {
-      if (!row.change) throw new Error("SYNC_CONFLICT_CHANGE_NOT_FOUND");
+
+    if (input.resolution === "approve") {
+      // Materialize the incoming change into business tables (retry). The
+      // change carries a full snapshot, so a missing base row is recovered.
+      await materializeSingleChange(tx, {
+        changeId: row.change.changeId,
+        operationId: row.change.operationId,
+        entityType: row.change.entityType,
+        entityGlobalId: row.change.entityGlobalId,
+        localEntityId: row.change.localEntityId,
+        changeType: row.change.changeType as "create" | "update" | "delete",
+        payload: row.change.payload as Record<string, unknown>,
+        originNodeId: row.change.originNodeId,
+        originSequence: row.change.originSequence,
+        parentRevision: row.change.parentRevision,
+      }, input.userId);
+      await tx
+        .update(syncChangeLogTable)
+        .set({ status: "applied", rejectionCode: null, appliedAt: new Date() })
+        .where(eq(syncChangeLogTable.changeId, row.change.changeId));
+      resolution = "approve";
+    } else if (input.resolution === "reject") {
+      // Explicit rejection — the change is excluded from every future
+      // package (prepareOutgoingChanges filters rejected rows).
+      await tx
+        .update(syncChangeLogTable)
+        .set({ status: "rejected", rejectionCode: "CONFLICT_REJECTED", appliedAt: new Date() })
+        .where(eq(syncChangeLogTable.changeId, row.change.changeId));
+      resolution = "reject";
+    } else if (input.resolution === "correct") {
       const node = await ensureNodeIdentity("web");
       await recordLocalChange(tx, {
         nodeId: node.nodeId,
@@ -50,6 +80,20 @@ export async function resolveSyncConflict(input: {
         payload: input.correction!,
         parentRevision: row.change.parentRevision,
       });
+      // Materialize the correction immediately so the local state reflects
+      // the decision (the correction also propagates through the change log).
+      await materializeSingleChange(tx, {
+        changeId: row.change.changeId,
+        operationId: row.change.operationId,
+        entityType: row.change.entityType,
+        entityGlobalId: row.change.entityGlobalId,
+        localEntityId: row.change.localEntityId,
+        changeType: "correction",
+        payload: input.correction!,
+        originNodeId: row.change.originNodeId,
+        originSequence: row.change.originSequence,
+        parentRevision: row.change.parentRevision,
+      }, input.userId);
       resolution = "correct";
     }
 

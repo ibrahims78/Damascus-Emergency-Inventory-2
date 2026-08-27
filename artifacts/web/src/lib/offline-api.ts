@@ -1,4 +1,4 @@
-import { dmePackageSummary, readDmeSyncPackageInWorker } from './dme-sync-browser';
+import { dmePackageSummary, readDmeSyncPackageInWorker, writeDmeSyncPackage } from './dme-sync-browser';
 
 type PublicUser = {
   id: number;
@@ -383,6 +383,207 @@ function nextId(state: OfflineState) {
   const id = state.nextId;
   state.nextId += 1;
   return id;
+}
+
+const STATE_KEY_BY_ENTITY: Record<string, string> = {
+  category: 'categories',
+  item: 'items',
+  equipment: 'equipment',
+  transaction: 'transactions',
+  inventory_batch: 'inventoryBatches',
+  batch_allocation: 'transactionBatchAllocations',
+  personal_custody: 'personalCustodies',
+  custody_return: 'custodyReturns',
+  damage_record: 'damageRecords',
+  central_return: 'centralReturns',
+  recipient: 'recipients',
+  exit_reason: 'exitReasons',
+  user: 'users',
+};
+
+function resolveGlobalId(state: OfflineState, entityType: string, globalId: string): number | null {
+  const mapping = state.entityIds.find((entry) => entry.entityType === entityType && entry.globalId === globalId);
+  return mapping ? mapping.localId : null;
+}
+
+function ensureLocalId(state: OfflineState, entityType: string, globalId: string): number {
+  const existing = resolveGlobalId(state, entityType, globalId);
+  if (existing != null) return existing;
+  const localId = state.nextId;
+  state.nextId += 1;
+  state.entityIds.push({ entityType, localId, globalId, createdAt: now() });
+  return localId;
+}
+
+function syncVector(state: OfflineState): Record<string, number> {
+  const vector: Record<string, number> = {};
+  for (const change of state.changeLog) {
+    const node = text(change.originNodeId);
+    const seq = numberValue(change.originSequence);
+    if (node && seq > (vector[node] ?? 0)) vector[node] = seq;
+  }
+  return vector;
+}
+
+function applyOfflineRow(state: OfflineState, change: Record<string, unknown>) {
+  const key = STATE_KEY_BY_ENTITY[text(change.entityType)];
+  if (!key || key === 'users') throw new Error(`نوع الكيان غير مدعوم: ${text(change.entityType)}`);
+  const rows = (state as unknown as Record<string, unknown[]>)[key];
+  const row = { ...((change.payload ?? {}) as Record<string, unknown>) };
+  if (text(change.entityType) === 'item' && row.categoryGlobalId != null) {
+    const categoryId = resolveGlobalId(state, 'category', String(row.categoryGlobalId));
+    if (categoryId != null) row.categoryId = categoryId;
+    else delete row.categoryId;
+  }
+  delete row.categoryGlobalId;
+  delete row.itemGlobalId;
+  delete row.equipmentGlobalId;
+  delete row.transactionGlobalId;
+  const localId = ensureLocalId(state, text(change.entityType), text(change.entityGlobalId));
+  row.id = localId;
+  const index = rows.findIndex((entry) => numberValue((entry as Record<string, unknown>).id) === localId);
+  if (change.changeType === 'delete') row.isActive = false;
+  if (index >= 0) rows[index] = { ...(rows[index] as object), ...row };
+  else rows.push(row);
+  if (localId >= state.nextId) state.nextId = localId + 1;
+}
+
+function applyOfflineTransactionBundle(state: OfflineState, change: Record<string, unknown>) {
+  const bundle = (change.payload ?? {}) as { transaction?: Record<string, unknown>; effects?: Array<Record<string, unknown>> };
+  if (!bundle.transaction) throw new Error('حزمة حركة غير مكتملة');
+  const txRow = { ...bundle.transaction };
+  if (txRow.itemGlobalId != null) {
+    const itemId = resolveGlobalId(state, 'item', String(txRow.itemGlobalId));
+    if (itemId == null) throw new Error('المادة المرجعية للحركة غير موجودة محلياً');
+    txRow.itemId = itemId;
+  }
+  if (txRow.equipmentGlobalId != null) {
+    const equipmentId = resolveGlobalId(state, 'equipment', String(txRow.equipmentGlobalId));
+    if (equipmentId == null) throw new Error('المعدة المرجعية للحركة غير موجودة محلياً');
+    txRow.equipmentId = equipmentId;
+  }
+  delete txRow.itemGlobalId;
+  delete txRow.equipmentGlobalId;
+  const txLocalId = ensureLocalId(state, 'transaction', text(change.entityGlobalId));
+  txRow.id = txLocalId;
+  if (state.transactions.some((entry) => text(entry.documentNumber) === text(txRow.documentNumber))) {
+    txRow.documentNumber = `${text(txRow.documentNumber)}-${String(change.originNodeId ?? 'node').slice(0, 8)}`;
+  }
+  const txIndex = state.transactions.findIndex((entry) => numberValue(entry.id) === txLocalId);
+  if (txIndex >= 0) state.transactions[txIndex] = { ...state.transactions[txIndex], ...txRow };
+  else state.transactions.push(txRow);
+  if (txLocalId >= state.nextId) state.nextId = txLocalId + 1;
+
+  for (const effect of bundle.effects ?? []) {
+    const key = STATE_KEY_BY_ENTITY[text(effect.entityType)];
+    if (!key || key === 'users') continue;
+    const rows = (state as unknown as Record<string, unknown[]>)[key];
+    const row = { ...((effect.row ?? {}) as Record<string, unknown>) };
+    if (row.itemGlobalId != null) {
+      const itemId = resolveGlobalId(state, 'item', String(row.itemGlobalId));
+      if (itemId != null) row.itemId = itemId;
+    }
+    if (row.equipmentGlobalId != null) {
+      const equipmentId = resolveGlobalId(state, 'equipment', String(row.equipmentGlobalId));
+      if (equipmentId != null) row.equipmentId = equipmentId;
+    }
+    if (row.transactionGlobalId != null) {
+      const transactionId = resolveGlobalId(state, 'transaction', String(row.transactionGlobalId));
+      if (transactionId != null) row.transactionId = transactionId;
+    }
+    if (row.batchGlobalId != null) {
+      const batchId = resolveGlobalId(state, 'inventory_batch', String(row.batchGlobalId));
+      if (batchId != null) row.batchId = batchId;
+    }
+    if (row.custodyGlobalId != null) {
+      const custodyId = resolveGlobalId(state, 'personal_custody', String(row.custodyGlobalId));
+      if (custodyId != null) row.custodyId = custodyId;
+    }
+    delete row.itemGlobalId;
+    delete row.equipmentGlobalId;
+    delete row.transactionGlobalId;
+    delete row.batchGlobalId;
+    delete row.custodyGlobalId;
+    delete row.sourceTransactionGlobalId;
+    const localId = ensureLocalId(state, text(effect.entityType), text(effect.entityGlobalId));
+    row.id = localId;
+    const index = rows.findIndex((entry) => numberValue((entry as Record<string, unknown>).id) === localId);
+    if (index >= 0) rows[index] = { ...(rows[index] as object), ...row };
+    else rows.push(row);
+    if (localId >= state.nextId) state.nextId = localId + 1;
+  }
+}
+
+function applyOfflineChanges(state: OfflineState, changes: unknown[]) {
+  const counts = { received: changes.length, applied: 0, duplicate: 0, conflicts: 0, rejected: 0 };
+  for (const raw of changes) {
+    const change = raw as Record<string, unknown>;
+    const changeId = text(change.changeId);
+    const operationId = text(change.operationId);
+    if (state.changeLog.some((entry) => entry.changeId === changeId || entry.operationId === operationId)) {
+      counts.duplicate += 1;
+      continue;
+    }
+    if (text(change.status) === 'rejected') {
+      counts.rejected += 1;
+      continue;
+    }
+    try {
+      if (text(change.entityType) === 'transaction' && change.payload && typeof change.payload === 'object' && (change.payload as { transaction?: unknown }).transaction) {
+        applyOfflineTransactionBundle(state, change);
+      } else {
+        applyOfflineRow(state, change);
+      }
+      state.changeLog.push({
+        changeId,
+        operationId,
+        entityType: text(change.entityType),
+        entityGlobalId: text(change.entityGlobalId),
+        localEntityId: change.localEntityId ?? null,
+        changeType: text(change.changeType, 'create'),
+        payload: change.payload ?? {},
+        originNodeId: text(change.originNodeId, state.nodeIdentity.nodeId),
+        originSequence: numberValue(change.originSequence, 0),
+        createdAt: text(change.createdAt, now()),
+        receivedAt: now(),
+        appliedAt: now(),
+        status: 'applied',
+        rejectionCode: null,
+      });
+      counts.applied += 1;
+    } catch (error) {
+      state.conflictQueue.push({
+        id: state.nextId,
+        changeId,
+        conflictCode: 'MATERIALIZE_FAILED',
+        entityType: text(change.entityType),
+        entityGlobalId: text(change.entityGlobalId),
+        severity: 'medium',
+        status: 'open',
+        message: error instanceof Error ? error.message : 'تعذر تطبيق التغيير',
+        createdAt: now(),
+      });
+      state.nextId += 1;
+      state.changeLog.push({
+        changeId,
+        operationId,
+        entityType: text(change.entityType),
+        entityGlobalId: text(change.entityGlobalId),
+        localEntityId: change.localEntityId ?? null,
+        changeType: text(change.changeType, 'create'),
+        payload: change.payload ?? {},
+        originNodeId: text(change.originNodeId, state.nodeIdentity.nodeId),
+        originSequence: numberValue(change.originSequence, 0),
+        createdAt: text(change.createdAt, now()),
+        receivedAt: now(),
+        appliedAt: null,
+        status: 'conflict',
+        rejectionCode: null,
+      });
+      counts.conflicts += 1;
+    }
+  }
+  return counts;
 }
 
 function recordOfflineChange(
@@ -1812,6 +2013,61 @@ async function route(pathname: string, searchParams: URLSearchParams, method: st
         console.warn('Could not clear offline restore preview:', error);
       });
       return response;
+    });
+  }
+
+  if (pathname === '/api/sync/node' && method === 'GET') {
+    if (!roleAllowed(currentUser, ['admin'])) return failure(403, 'ليس لديك صلاحية');
+    return read((state) => json({ nodeId: state.nodeIdentity.nodeId, vector: syncVector(state) }));
+  }
+  if (pathname === '/api/sync/export' && method === 'POST') {
+    if (!roleAllowed(currentUser, ['admin'])) return failure(403, 'ليس لديك صلاحية');
+    const body = readBody(init);
+    const password = text(body.password);
+    if (password.length < 8) return failure(400, 'كلمة مرور الحزمة يجب أن تكون 8 أحرف على الأقل');
+    return mutate(async (state) => {
+      const changes = state.changeLog.filter((entry) => text(entry.status) !== 'rejected');
+      const records: Array<{ entityType: string; localId: number; data: Record<string, unknown> }> = [];
+      for (const mapping of state.entityIds) {
+        const key = STATE_KEY_BY_ENTITY[mapping.entityType];
+        if (!key || key === 'users') continue;
+        const row = ((state as unknown as Record<string, unknown[]>)[key] as Array<Record<string, unknown>>).find((entry) => numberValue(entry.id) === mapping.localId);
+        if (row) records.push({ entityType: mapping.entityType, localId: mapping.localId, data: row });
+      }
+      const bytes = await writeDmeSyncPackage({
+        password,
+        packageType: 'full-backup',
+        schemaVersion: '1',
+        sourceNodeId: state.nodeIdentity.nodeId,
+        records,
+        changes,
+        lastVector: syncVector(state),
+      });
+      return new Response(bytes.slice().buffer as ArrayBuffer, {
+        status: 200,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-disposition': `attachment; filename="damascus-sync-${now().slice(0, 10)}.dme-sync"`,
+          [OFFLINE_HEADER]: '1',
+        },
+      });
+    });
+  }
+  if (pathname === '/api/sync/import' && method === 'POST') {
+    if (!roleAllowed(currentUser, ['admin'])) return failure(403, 'ليس لديك صلاحية');
+    const body = readBody(init);
+    let pkg;
+    try {
+      pkg = await readDmeSyncPackageInWorker(
+        Uint8Array.from(atob(text(body.packageBase64)), (character) => character.charCodeAt(0)),
+        text(body.password),
+      );
+    } catch (error) {
+      return failure(400, error instanceof Error ? error.message : 'تعذر فك تشفير الحزمة');
+    }
+    return mutate((state) => {
+      const counts = applyOfflineChanges(state, pkg.changes);
+      return json({ mode: 'sync-apply', report: { counts } });
     });
   }
 

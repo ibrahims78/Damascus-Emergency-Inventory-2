@@ -83,6 +83,22 @@ async function initializeDesktopDatabase(): Promise<void> {
     await desktopClient.exec(
       `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS details jsonb;`,
     );
+    // Sync schema drift repairs: desktop-schema.sql historically lacked the
+    // severity column and the trusted-nodes/pairings/relay tables. Fresh
+    // databases get them from the schema file; existing data directories
+    // are repaired here, idempotently, on every boot.
+    await desktopClient.exec(
+      `ALTER TABLE sync_conflicts ADD COLUMN IF NOT EXISTS severity text NOT NULL DEFAULT 'medium';`,
+    );
+    await desktopClient.exec(
+      `CREATE TABLE IF NOT EXISTS sync_trusted_nodes ("node_id" text PRIMARY KEY NOT NULL, "node_type" text NOT NULL, "label" text, "status" text DEFAULT 'trusted' NOT NULL, "paired_at" timestamp with time zone DEFAULT now() NOT NULL, "revoked_at" timestamp with time zone, "last_seen_at" timestamp with time zone);`,
+    );
+    await desktopClient.exec(
+      `CREATE TABLE IF NOT EXISTS sync_pairings ("pairing_id" text PRIMARY KEY NOT NULL, "code_hash" text NOT NULL UNIQUE, "source_node_id" text NOT NULL, "target_node_id" text, "expires_at" timestamp with time zone NOT NULL, "consumed_at" timestamp with time zone, "revoked_at" timestamp with time zone, "created_at" timestamp with time zone DEFAULT now() NOT NULL);`,
+    );
+    await desktopClient.exec(
+      `CREATE TABLE IF NOT EXISTS sync_relay_packages ("relay_id" text PRIMARY KEY NOT NULL, "session_id" text NOT NULL, "package_id" text NOT NULL, "response_to_relay_id" text, "direction" text NOT NULL, "source_node_id" text NOT NULL, "target_node_id" text NOT NULL, "content_hash" text NOT NULL, "transport_hash" text NOT NULL, "payload" text NOT NULL, "status" text DEFAULT 'available' NOT NULL, "expires_at" timestamp with time zone NOT NULL, "downloaded_at" timestamp with time zone, "created_at" timestamp with time zone DEFAULT now() NOT NULL, CONSTRAINT "sync_relay_session_transport_unique" UNIQUE("session_id", "transport_hash"));`,
+    );
     if (backupSchemaReady) {
       return;
     }

@@ -17,7 +17,7 @@ import {
   type TransactionType,
 } from "@workspace/db";
 import { DELIVERY_DESTINATIONS } from "@workspace/db";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { Request } from "express";
 import {
   allocateBatchesFefo,
@@ -1118,6 +1118,224 @@ async function createAdjustment(
   return transaction;
 }
 
+/**
+ * Build the sync payload for a movement: the full transaction row plus
+ * business effects (item/equipment stock snapshots, FEFO batches and
+ * allocations, custody rows, damage/central-return records). References to
+ * local ids travel as global-id carriers so the receiver can re-map them.
+ */
+async function buildMovementSyncPayload(
+  tx: DbTransaction,
+  options: {
+    type: TransactionType;
+    transaction: typeof transactionsTable.$inferSelect;
+    entity: ReturnType<typeof assertEntityReference> | null;
+    input: MovementInput;
+    transactionGlobalId: string;
+  },
+) {
+  const { type, transaction, entity, input, transactionGlobalId } = options;
+  const effects: Array<{
+    entityType: string;
+    entityGlobalId: string;
+    changeType: string;
+    row: Record<string, unknown>;
+  }> = [];
+  const txRow: Record<string, unknown> = { ...transaction };
+
+  const addItemEffect = async (itemId: number) => {
+    const [item] = await tx
+      .select()
+      .from(itemsTable)
+      .where(eq(itemsTable.id, itemId))
+      .limit(1);
+    if (!item) return;
+    const itemGlobalId = await ensureEntityIdentity(tx, "item", item.id);
+    txRow.itemGlobalId = itemGlobalId;
+    effects.push({
+      entityType: "item",
+      entityGlobalId: itemGlobalId,
+      changeType: "update",
+      row: {
+        ...item,
+        categoryGlobalId: item.categoryId
+          ? await ensureEntityIdentity(tx, "category", item.categoryId)
+          : null,
+      },
+    });
+    // FEFO state travels with the movement so balances and batch
+    // remaining quantities converge together.
+    const batches = await tx
+      .select()
+      .from(inventoryBatchesTable)
+      .where(eq(inventoryBatchesTable.itemId, item.id))
+      .orderBy(asc(inventoryBatchesTable.id));
+    for (const batch of batches) {
+      const batchGlobalId = await ensureEntityIdentity(tx, "inventory_batch", batch.id);
+      effects.push({
+        entityType: "inventory_batch",
+        entityGlobalId: batchGlobalId,
+        changeType: "update",
+        row: {
+          ...batch,
+          itemGlobalId,
+          transactionGlobalId: batch.sourceTransactionId ? transactionGlobalId : null,
+        },
+      });
+    }
+    if (type === "out") {
+      const allocations = await tx
+        .select()
+        .from(transactionBatchAllocationsTable)
+        .where(eq(transactionBatchAllocationsTable.transactionId, transaction.id));
+      for (const allocation of allocations) {
+        const allocationGlobalId = await ensureEntityIdentity(
+          tx,
+          "batch_allocation",
+          allocation.id,
+        );
+        const batchGlobalId = await ensureEntityIdentity(
+          tx,
+          "inventory_batch",
+          allocation.batchId,
+        );
+        effects.push({
+          entityType: "batch_allocation",
+          entityGlobalId: allocationGlobalId,
+          changeType: "create",
+          row: { ...allocation, transactionGlobalId, batchGlobalId },
+        });
+      }
+    }
+  };
+
+  const addEquipmentEffect = async (equipmentId: number) => {
+    const [equipment] = await tx
+      .select()
+      .from(equipmentTable)
+      .where(eq(equipmentTable.id, equipmentId))
+      .limit(1);
+    if (!equipment) return;
+    const equipmentGlobalId = await ensureEntityIdentity(tx, "equipment", equipment.id);
+    txRow.equipmentGlobalId = equipmentGlobalId;
+    effects.push({
+      entityType: "equipment",
+      entityGlobalId: equipmentGlobalId,
+      changeType: "update",
+      row: { ...equipment },
+    });
+  };
+
+  if (entity?.itemType === "item" && entity.itemId) {
+    await addItemEffect(entity.itemId);
+  }
+  if (entity?.itemType === "equipment" && entity.equipmentId) {
+    await addEquipmentEffect(entity.equipmentId);
+  }
+
+  if (type === "custody_out") {
+    const custodies = await tx
+      .select()
+      .from(personalCustodiesTable)
+      .where(eq(personalCustodiesTable.sourceTransactionId, transaction.id));
+    for (const custody of custodies) {
+      const custodyGlobalId = await ensureEntityIdentity(tx, "personal_custody", custody.id);
+      effects.push({
+        entityType: "personal_custody",
+        entityGlobalId: custodyGlobalId,
+        changeType: "create",
+        row: {
+          ...custody,
+          equipmentGlobalId: txRow.equipmentGlobalId,
+          transactionGlobalId,
+        },
+      });
+    }
+  }
+  if (type === "custody_return") {
+    const returns = await tx
+      .select()
+      .from(custodyReturnsTable)
+      .where(eq(custodyReturnsTable.transactionId, transaction.id));
+    const custodyId = parseOptionalId(input.custodyId);
+    const custodyGlobalId = custodyId
+      ? await ensureEntityIdentity(tx, "personal_custody", custodyId)
+      : undefined;
+    for (const ret of returns) {
+      const returnGlobalId = await ensureEntityIdentity(tx, "custody_return", ret.id);
+      effects.push({
+        entityType: "custody_return",
+        entityGlobalId: returnGlobalId,
+        changeType: "create",
+        row: { ...ret, transactionGlobalId, custodyGlobalId },
+      });
+    }
+    if (custodyId && custodyGlobalId) {
+      const [custody] = await tx
+        .select()
+        .from(personalCustodiesTable)
+        .where(eq(personalCustodiesTable.id, custodyId))
+        .limit(1);
+      if (custody) {
+        // Equipment balance changes on return; attach the equipment effect.
+        await addEquipmentEffect(custody.equipmentId);
+        effects.push({
+          entityType: "personal_custody",
+          entityGlobalId: custodyGlobalId,
+          changeType: "update",
+          row: {
+            ...custody,
+            equipmentGlobalId: txRow.equipmentGlobalId,
+            transactionGlobalId,
+          },
+        });
+      }
+    }
+  }
+  if (type === "damage") {
+    const records = await tx
+      .select()
+      .from(damageRecordsTable)
+      .where(eq(damageRecordsTable.transactionId, transaction.id));
+    for (const record of records) {
+      const recordGlobalId = await ensureEntityIdentity(tx, "damage_record", record.id);
+      effects.push({
+        entityType: "damage_record",
+        entityGlobalId: recordGlobalId,
+        changeType: "create",
+        row: {
+          ...record,
+          transactionGlobalId,
+          itemGlobalId: txRow.itemGlobalId,
+          equipmentGlobalId: txRow.equipmentGlobalId,
+        },
+      });
+    }
+  }
+  if (type === "central_return") {
+    const records = await tx
+      .select()
+      .from(centralReturnsTable)
+      .where(eq(centralReturnsTable.transactionId, transaction.id));
+    for (const record of records) {
+      const recordGlobalId = await ensureEntityIdentity(tx, "central_return", record.id);
+      effects.push({
+        entityType: "central_return",
+        entityGlobalId: recordGlobalId,
+        changeType: "create",
+        row: {
+          ...record,
+          transactionGlobalId,
+          itemGlobalId: txRow.itemGlobalId,
+          equipmentGlobalId: txRow.equipmentGlobalId,
+        },
+      });
+    }
+  }
+
+  return { transaction: txRow, effects };
+}
+
 export async function createInventoryMovement(
   input: MovementInput,
   context: MovementContext,
@@ -1131,7 +1349,7 @@ export async function createInventoryMovement(
       const documentNumber = await lockDocumentNumber(tx, type);
 
       let entity: ReturnType<typeof assertEntityReference> | null = null;
-      if (input.kind !== "custody_return" && input.kind !== "adjust") {
+      if (input.kind !== "custody_return") {
         entity = assertEntityReference(input.itemType, input.itemId, input.equipmentId);
       }
 
@@ -1184,6 +1402,13 @@ export async function createInventoryMovement(
         originSequence,
         documentNumberScope: `web:${type}`,
       });
+      const syncPayload = await buildMovementSyncPayload(tx, {
+        type,
+        transaction,
+        entity,
+        input,
+        transactionGlobalId,
+      });
       await recordLocalChange(tx, {
         nodeId: node.nodeId,
         operationId,
@@ -1192,14 +1417,7 @@ export async function createInventoryMovement(
         localEntityId: transaction.id,
         globalId: transactionGlobalId,
         changeType: "create",
-        payload: {
-          type: transaction.type,
-          documentNumber: transaction.documentNumber,
-          itemType: transaction.itemType,
-          itemId: transaction.itemId,
-          equipmentId: transaction.equipmentId,
-          quantity: transaction.quantity,
-        },
+        payload: syncPayload,
       });
 
       await writeAudit(tx, context, "movement_created", transaction.id, {

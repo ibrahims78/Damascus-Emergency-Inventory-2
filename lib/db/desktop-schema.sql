@@ -102,6 +102,7 @@ CREATE TABLE "sync_conflicts" (
 "id" serial PRIMARY KEY NOT NULL,
 "change_id" text NOT NULL UNIQUE,
 "conflict_code" text NOT NULL,
+"severity" text DEFAULT 'medium' NOT NULL,
 "details" jsonb NOT NULL,
 "status" text DEFAULT 'open' NOT NULL,
 "resolved_by" integer,
@@ -154,6 +155,46 @@ CREATE TABLE "sync_session_packages" (
   CONSTRAINT "sync_session_packages_session_fk" FOREIGN KEY ("session_id")
     REFERENCES "sync_sessions" ("session_id") ON DELETE cascade,
   CONSTRAINT "sync_session_packages_hash_unique" UNIQUE ("session_id", "content_hash")
+);
+--> statement-breakpoint
+CREATE TABLE "sync_trusted_nodes" (
+"node_id" text PRIMARY KEY NOT NULL,
+"node_type" text NOT NULL,
+"label" text,
+"status" text DEFAULT 'trusted' NOT NULL,
+"paired_at" timestamp with time zone DEFAULT now() NOT NULL,
+"revoked_at" timestamp with time zone,
+"last_seen_at" timestamp with time zone
+);
+--> statement-breakpoint
+CREATE TABLE "sync_pairings" (
+"pairing_id" text PRIMARY KEY NOT NULL,
+"code_hash" text NOT NULL UNIQUE,
+"source_node_id" text NOT NULL,
+"target_node_id" text,
+"expires_at" timestamp with time zone NOT NULL,
+"consumed_at" timestamp with time zone,
+"revoked_at" timestamp with time zone,
+"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "sync_relay_packages" (
+"relay_id" text PRIMARY KEY NOT NULL,
+"session_id" text NOT NULL,
+"package_id" text NOT NULL,
+"response_to_relay_id" text,
+"direction" text NOT NULL,
+"source_node_id" text NOT NULL,
+"target_node_id" text NOT NULL,
+"content_hash" text NOT NULL,
+"transport_hash" text NOT NULL,
+"payload" text NOT NULL,
+"status" text DEFAULT 'available' NOT NULL,
+"expires_at" timestamp with time zone NOT NULL,
+"downloaded_at" timestamp with time zone,
+"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+CONSTRAINT "sync_relay_packages_session_fk" FOREIGN KEY ("session_id") REFERENCES "sync_sessions"("session_id") ON DELETE cascade,
+CONSTRAINT "sync_relay_session_transport_unique" UNIQUE("session_id", "transport_hash")
 );
 --> statement-breakpoint
 CREATE TABLE "categories" (
@@ -480,6 +521,32 @@ ALTER TABLE "alert_reads" ADD CONSTRAINT "alert_reads_alert_id_alerts_id_fk" FOR
 ALTER TABLE "alert_reads" ADD CONSTRAINT "alert_reads_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "alerts" ADD CONSTRAINT "alerts_resolved_by_users_id_fk" FOREIGN KEY ("resolved_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+CREATE INDEX "sync_change_log_origin_sequence_idx" ON "sync_change_log" USING btree ("origin_node_id","origin_sequence");
+--> statement-breakpoint
+CREATE INDEX "sync_change_log_entity_idx" ON "sync_change_log" USING btree ("entity_type","entity_global_id");
+--> statement-breakpoint
+CREATE INDEX "sync_change_log_status_idx" ON "sync_change_log" USING btree ("status");
+--> statement-breakpoint
+CREATE INDEX "sync_entity_ids_entity_type_idx" ON "sync_entity_ids" USING btree ("entity_type");
+--> statement-breakpoint
+CREATE INDEX "sync_inbox_status_idx" ON "sync_inbox" USING btree ("status");
+--> statement-breakpoint
+CREATE INDEX "sync_conflicts_status_idx" ON "sync_conflicts" USING btree ("status");
+--> statement-breakpoint
+CREATE INDEX "sync_tombstones_propagated_idx" ON "sync_tombstones" USING btree ("propagated");
+--> statement-breakpoint
+CREATE INDEX "sync_trusted_nodes_status_idx" ON "sync_trusted_nodes" USING btree ("status");
+--> statement-breakpoint
+CREATE INDEX "sync_pairings_expiry_idx" ON "sync_pairings" USING btree ("expires_at");
+--> statement-breakpoint
+CREATE INDEX "sync_pairings_source_idx" ON "sync_pairings" USING btree ("source_node_id");
+--> statement-breakpoint
+CREATE INDEX "sync_relay_packages_session_idx" ON "sync_relay_packages" USING btree ("session_id");
+--> statement-breakpoint
+CREATE INDEX "sync_relay_packages_expiry_idx" ON "sync_relay_packages" USING btree ("expires_at");
+--> statement-breakpoint
+CREATE INDEX "sync_relay_packages_status_idx" ON "sync_relay_packages" USING btree ("status");
 --> statement-breakpoint
 CREATE INDEX "items_type_active_idx" ON "items" USING btree ("item_type","is_active");
 --> statement-breakpoint

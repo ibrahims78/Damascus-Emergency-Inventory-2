@@ -1,4 +1,4 @@
-import { gunzipSync } from 'fflate';
+import { gzipSync, gunzipSync } from 'fflate';
 import scryptModule from 'scrypt-js';
 
 type SyncRecord = {
@@ -179,4 +179,99 @@ export function dmePackageSummary(pkg: SyncPackage) {
     changeCount: pkg.changes.length,
     entityTypes: [...new Set(pkg.records.map((record) => record.entityType))].sort(),
   };
+}
+
+function toBase64(value: Uint8Array) {
+  let binary = "";
+  for (let index = 0; index < value.length; index += 0x8000) {
+    binary += String.fromCharCode(...value.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, nested) => {
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+      return Object.fromEntries(
+        Object.entries(nested as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)),
+      );
+    }
+    return nested;
+  });
+}
+
+/** Write a .dme-sync package identical in format to the server's
+ *  `createSyncPackage` (lib/backup-format): MAGIC + JSON envelope line, with
+ *  the gzip-compressed NDJSON payload inside AES-256-GCM (scrypt-derived
+ *  key, HMAC-SHA-256 authentication). */
+export async function writeDmeSyncPackage(input: {
+  password: string;
+  packageType: "full-backup" | "delta-sync";
+  schemaVersion: string;
+  sourceNodeId: string;
+  records: Array<{ entityType: string; localId?: number | null; data: Record<string, unknown> }>;
+  changes?: unknown[];
+  baseVector?: Record<string, number>;
+  lastVector?: Record<string, number>;
+}): Promise<Uint8Array> {
+  const changes = input.changes ?? [];
+  const manifest = {
+    format: "dme-sync",
+    formatVersion: 1,
+    packageType: input.packageType,
+    schemaVersion: input.schemaVersion,
+    createdAt: new Date().toISOString(),
+    sourceNodeId: input.sourceNodeId,
+    changesFile: "changes.jsonl",
+    recordsFile: "records.jsonl",
+    recordCount: input.records.length,
+    changeCount: changes.length,
+    compression: "gzip",
+    encryption: "AES-256-GCM",
+    kdf: "scrypt",
+    checksumAlgorithm: "SHA-256",
+    macAlgorithm: "HMAC-SHA-256",
+    ...(input.baseVector ? { baseVector: input.baseVector } : {}),
+    ...(input.lastVector ? { lastVector: input.lastVector } : {}),
+  };
+  const lines = [
+    canonicalJson({ type: "manifest", manifest }),
+    ...changes.map((change) => canonicalJson({ type: "change", change })),
+    ...input.records.map((record) => canonicalJson({ type: "record", record })),
+  ];
+  const plaintext = new TextEncoder().encode(`${lines.join("\n")}\n`);
+  const compressed = gzipSync(plaintext, { level: 6 });
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const derived = await SCRYPT(new TextEncoder().encode(input.password), salt, 16384, 8, 1, 64);
+  const encryptionKey = derived.slice(0, 32);
+  const macKey = derived.slice(32);
+  const cryptoKey = await crypto.subtle.importKey("raw", encryptionKey as BufferSource, "AES-GCM", false, ["encrypt"]);
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, compressed as BufferSource));
+  // WebCrypto appends the 16-byte GCM auth tag to the ciphertext.
+  const ciphertext = encrypted.slice(0, encrypted.length - 16);
+  const authTag = encrypted.slice(encrypted.length - 16);
+  const checksum = toHex(await sha256(ciphertext));
+  const macInput = new Uint8Array(salt.length + iv.length + authTag.length + ciphertext.length);
+  macInput.set(salt, 0);
+  macInput.set(iv, salt.length);
+  macInput.set(authTag, salt.length + iv.length);
+  macInput.set(ciphertext, salt.length + iv.length + authTag.length);
+  const mac = toHex(await hmacSha256(macKey, macInput));
+  const header = new TextEncoder().encode(
+    JSON.stringify({
+      formatVersion: 1,
+      salt: toBase64(salt),
+      iv: toBase64(iv),
+      authTag: toBase64(authTag),
+      checksum,
+      mac,
+      ciphertext: toBase64(ciphertext),
+    }),
+  );
+  const output = new Uint8Array(MAGIC.length + header.length + 1);
+  output.set(MAGIC, 0);
+  output.set(header, MAGIC.length);
+  output[MAGIC.length + header.length] = 10;
+  return output;
 }

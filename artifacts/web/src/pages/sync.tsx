@@ -50,6 +50,14 @@ export function SyncPage() {
   const [targetNodeId, setTargetNodeId] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [manualFile, setManualFile] = useState<File | null>(null);
+  const [peerUrl, setPeerUrl] = useState("");
+  const [peerUsername, setPeerUsername] = useState("admin");
+  const [peerPassword, setPeerPassword] = useState("");
+  const [exchangeResult, setExchangeResult] = useState<string | null>(null);
+  const [exportPassword, setExportPassword] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPassword, setImportPassword] = useState("");
+  const [importResult, setImportResult] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -109,6 +117,97 @@ export function SyncPage() {
     try {
       await api(`/conflicts/${id}/resolve`, { method: "POST", body: JSON.stringify({ resolution }) });
       setMessage("تم حفظ قرار التسوية في سجل التدقيق.");
+      await refresh();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runExchange() {
+    if (!peerUrl || !peerUsername || !peerPassword) {
+      setMessage("أدخل عنوان الخادم واسم المستخدم وكلمة المرور.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await api<{
+        sent: number;
+        received: number;
+        local: { counts: Record<string, number> };
+        peerReport: { counts: Record<string, number> };
+      }>("/exchange", {
+        method: "POST",
+        body: JSON.stringify({ peerUrl, username: peerUsername, password: peerPassword }),
+      });
+      const summarize = (counts: Record<string, number>) =>
+        `مستلم ${counts.received ?? 0}، مطبق ${counts.applied ?? 0}، مكرر ${counts.duplicate ?? 0}، تعارض ${counts.conflicts ?? 0}`;
+      setExchangeResult(
+        `اكتمل التبادل — أرسلنا ${result.sent} تغييراً واستقبلنا ${result.received}. ` +
+          `محلياً: ${summarize(result.local?.counts ?? {})}. ` +
+          `لدى الطرف الآخر: ${summarize(result.peerReport?.counts ?? {})}.`,
+      );
+      await refresh();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function exportPackage() {
+    if (!exportPassword) {
+      setMessage("أدخل كلمة مرور الحزمة.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/sync/export", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: exportPassword }),
+      });
+      if (!response.ok) {
+        const err = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error || "فشل تصدير الحزمة");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `dme-sync-${new Date().toISOString().slice(0, 10)}.dme-sync`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("تم تصدير حزمة المزامنة — انقل الملف إلى النسخة الأخرى واستوردها من صفحة المزامنة هناك.");
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importPackage() {
+    if (!importFile || !importPassword) {
+      setMessage("اختر ملف الحزمة وأدخل كلمة المرور.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const bytes = new Uint8Array(await importFile.arrayBuffer());
+      let binary = "";
+      for (let index = 0; index < bytes.length; index += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+      }
+      const result = await api<{ mode: string; report: { counts: Record<string, number> } }>("/import", {
+        method: "POST",
+        body: JSON.stringify({ packageBase64: btoa(binary), password: importPassword }),
+      });
+      const counts = result.report?.counts ?? {};
+      setImportResult(
+        `استُقبلت ${counts.received ?? 0} تغييراً: مطبق ${counts.applied ?? 0}، مكرر ${counts.duplicate ?? 0}، تعارض ${counts.conflicts ?? 0}، مرفوض ${counts.rejected ?? 0}.`,
+      );
       await refresh();
     } catch (error) {
       setMessage((error as Error).message);
@@ -184,6 +283,22 @@ export function SyncPage() {
 
       {message && <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm">{message}</div>}
 
+      <Card>
+        <CardHeader><CardTitle>مزامنة شبكية مباشرة</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            تبادل فوري للتغييرات مع خادم آخر عبر الشبكة — يتطلب وصولاً مباشراً إلى عنوانه وبيانات مشرف على الطرف الآخر.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Input value={peerUrl} onChange={(event) => setPeerUrl(event.target.value)} placeholder="عنوان الخادم، مثال: http://192.168.1.50:8080" dir="ltr" className="min-w-[260px] flex-1" />
+            <Input value={peerUsername} onChange={(event) => setPeerUsername(event.target.value)} placeholder="اسم المستخدم" className="max-w-[150px]" />
+            <Input type="password" value={peerPassword} onChange={(event) => setPeerPassword(event.target.value)} placeholder="كلمة المرور" className="max-w-[150px]" />
+            <Button onClick={runExchange} disabled={busy}>مزامنة الآن</Button>
+          </div>
+          {exchangeResult && <div className="rounded border bg-muted/40 px-3 py-2 text-sm">{exchangeResult}</div>}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>هوية هذه العقدة</CardTitle></CardHeader>
@@ -251,6 +366,29 @@ export function SyncPage() {
               </div>
             ))}
             {relayPackages.length === 0 && <p className="text-sm text-muted-foreground">لا توجد حزم معلقة.</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>تصدير حزمة مزامنة</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              تنزيل كل التغييرات المحلية في ملف <span dir="ltr">.dme-sync</span> مشفّر، لنقله يدوياً (فلاش / بريد / تطبيق ملفات) إلى نسخة أخرى واستيراده هناك.
+            </p>
+            <Input type="password" value={exportPassword} onChange={(event) => setExportPassword(event.target.value)} placeholder="كلمة مرور الحزمة (8 أحرف على الأقل)" />
+            <Button className="w-full" onClick={exportPackage} disabled={busy || !exportPassword}>تنزيل الحزمة</Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>استيراد حزمة مزامنة</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              استيراد ملف <span dir="ltr">.dme-sync</span> من نسخة أخرى وتطبيق تغييراته، مع رصد التعارضات وعدم تكرار التطبيق عند إعادة الاستيراد.
+            </p>
+            <Input type="file" accept=".dme-sync,application/octet-stream" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
+            <Input type="password" value={importPassword} onChange={(event) => setImportPassword(event.target.value)} placeholder="كلمة مرور الحزمة" />
+            <Button className="w-full" onClick={importPackage} disabled={busy || !importFile || !importPassword}>استيراد وتطبيق</Button>
+            {importResult && <div className="rounded border bg-muted/40 px-3 py-2 text-sm">{importResult}</div>}
           </CardContent>
         </Card>
 

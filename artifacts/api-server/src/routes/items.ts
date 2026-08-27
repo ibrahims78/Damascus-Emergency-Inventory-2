@@ -210,11 +210,32 @@ router.post(
           globalId,
           changeType: "create",
           payload: {
-            name: created.name,
-            itemType: created.itemType,
-            currentStock: created.currentStock,
+            ...created,
+            categoryGlobalId: created.categoryId
+              ? await ensureEntityIdentity(tx, "category", created.categoryId)
+              : null,
           },
         });
+        // Opening batch travels as its own change so the receiver restores
+        // both the stock balance and its FEFO batch.
+        const createdBatches = await tx
+          .select()
+          .from(inventoryBatchesTable)
+          .where(eq(inventoryBatchesTable.itemId, created.id));
+        for (const batch of createdBatches) {
+          const batchGlobalId = await ensureEntityIdentity(tx, "inventory_batch", batch.id);
+          await recordLocalChange(tx, {
+            nodeId: node.nodeId,
+            entityType: "inventory_batch",
+            localEntityId: batch.id,
+            globalId: batchGlobalId,
+            changeType: "create",
+            payload: {
+              ...batch,
+              itemGlobalId: globalId,
+            },
+          });
+        }
         return created;
       });
       await auditLog({ req, action: "create", entityType: "item", entityId: item.id, details: { name: item.name, itemType: item.itemType } });
@@ -268,6 +289,8 @@ router.post(
         updated: number;
         errors: { row: number; name: string; error: string }[];
       } = { created: 0, updated: 0, errors: [] };
+
+      const bulkNode = await ensureNodeIdentity("web");
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -323,25 +346,42 @@ router.post(
 
         try {
           if (mode === "upsert" && code !== null) {
-            const [saved] = await db
-              .insert(itemsTable)
-              .values(values)
-              .onConflictDoUpdate({
-                target: itemsTable.code,
-                set: {
-                  name: values.name,
-                  categoryId: values.categoryId,
-                  unit: values.unit,
-                  currentStock: values.currentStock,
-                  minStock: values.minStock,
-                  expiryDate: values.expiryDate,
-                  batchNumber: values.batchNumber,
-                  location: values.location,
-                  supplier: values.supplier,
-                  notes: values.notes,
+            const [saved] = await db.transaction(async (tx) => {
+              const [row] = await tx
+                .insert(itemsTable)
+                .values(values)
+                .onConflictDoUpdate({
+                  target: itemsTable.code,
+                  set: {
+                    name: values.name,
+                    categoryId: values.categoryId,
+                    unit: values.unit,
+                    currentStock: values.currentStock,
+                    minStock: values.minStock,
+                    expiryDate: values.expiryDate,
+                    batchNumber: values.batchNumber,
+                    location: values.location,
+                    supplier: values.supplier,
+                    notes: values.notes,
+                  },
+                })
+                .returning();
+              const globalId = await ensureEntityIdentity(tx, "item", row.id);
+              await recordLocalChange(tx, {
+                nodeId: bulkNode.nodeId,
+                entityType: "item",
+                localEntityId: row.id,
+                globalId,
+                changeType: isUpdate ? "update" : "create",
+                payload: {
+                  ...row,
+                  categoryGlobalId: row.categoryId
+                    ? await ensureEntityIdentity(tx, "category", row.categoryId)
+                    : null,
                 },
-              })
-              .returning();
+              });
+              return [row];
+            });
             if (isUpdate) {
               results.updated++;
               await auditLog({
@@ -356,7 +396,44 @@ router.post(
               });
             }
           } else {
-            const [created] = await db.insert(itemsTable).values(values).returning();
+            const [created] = await db.transaction(async (tx) => {
+              const [row] = await tx.insert(itemsTable).values(values).returning();
+              const globalId = await ensureEntityIdentity(tx, "item", row.id);
+              await recordLocalChange(tx, {
+                nodeId: bulkNode.nodeId,
+                entityType: "item",
+                localEntityId: row.id,
+                globalId,
+                changeType: "create",
+                payload: {
+                  ...row,
+                  categoryGlobalId: row.categoryId
+                    ? await ensureEntityIdentity(tx, "category", row.categoryId)
+                    : null,
+                },
+              });
+              if (row.currentStock > 0) {
+                const openingDate = new Date().toISOString().slice(0, 10);
+                const [batch] = await tx.insert(inventoryBatchesTable).values({
+                  itemId: row.id,
+                  receivedQuantity: row.currentStock,
+                  remainingQuantity: row.currentStock,
+                  deliveryNoteNumber: `افتتاحي-${row.id}`,
+                  deliveryNoteDate: openingDate,
+                  supplySource: "central_warehouses",
+                }).returning();
+                const batchGlobalId = await ensureEntityIdentity(tx, "inventory_batch", batch.id);
+                await recordLocalChange(tx, {
+                  nodeId: bulkNode.nodeId,
+                  entityType: "inventory_batch",
+                  localEntityId: batch.id,
+                  globalId: batchGlobalId,
+                  changeType: "create",
+                  payload: { ...batch, itemGlobalId: globalId },
+                });
+              }
+              return [row];
+            });
             results.created++;
             await auditLog({
               req, action: "create", entityType: "item", entityId: created.id,
@@ -630,10 +707,10 @@ router.put(
           globalId,
           changeType: "update",
           payload: {
-            name: updated.name,
-            itemType: updated.itemType,
-            currentStock: updated.currentStock,
-            minStock: updated.minStock,
+            ...updated,
+            categoryGlobalId: updated.categoryId
+              ? await ensureEntityIdentity(tx, "category", updated.categoryId)
+              : null,
           },
         });
         return updated;
@@ -668,7 +745,7 @@ router.delete(
           .update(itemsTable)
           .set({ isActive: false, updatedAt: new Date() })
           .where(eq(itemsTable.id, id))
-          .returning({ id: itemsTable.id, name: itemsTable.name });
+          .returning();
         if (!updated) return undefined;
         const globalId = await ensureEntityIdentity(tx, "item", updated.id);
         await recordLocalChange(tx, {
@@ -677,7 +754,12 @@ router.delete(
           localEntityId: updated.id,
           globalId,
           changeType: "delete",
-          payload: { name: updated.name },
+          payload: {
+            ...updated,
+            categoryGlobalId: updated.categoryId
+              ? await ensureEntityIdentity(tx, "category", updated.categoryId)
+              : null,
+          },
         });
         return updated;
       });

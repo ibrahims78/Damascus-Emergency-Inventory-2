@@ -1,14 +1,18 @@
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import { auditLog } from "../middlewares/audit";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import {
   acknowledgeSyncPackage,
+  applyIncomingChanges,
   applySyncPackage,
   createSyncSession,
+  currentVector,
   getSyncNode,
   getSyncPackage,
   getSyncSession,
   handshakeSyncSession,
+  prepareOutgoingChanges,
   prepareSyncPackage,
 } from "../lib/sync-service";
 import {
@@ -22,6 +26,15 @@ import {
   uploadRelayPackage,
 } from "../lib/relay-service";
 import { listSyncConflicts, resolveSyncConflict } from "../lib/conflict-service";
+import {
+  applyRestore,
+  createDeltaBackup,
+  createFullBackup,
+  decodePackage,
+  packageSummary,
+} from "../lib/backup-service";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router = Router();
 
@@ -29,11 +42,48 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "تعذر تنفيذ عملية المزامنة";
 }
 
-router.use(requireAuth, requireRole("admin"));
+// POST /api/sync/exchange is dual-mode: the orchestrator runs under a normal
+// admin session, while the peer side authenticates with Basic credentials and
+// must stay reachable without a session cookie. Every other sync route keeps
+// requiring an admin session.
+router.use((req, res, next) => {
+  if (
+    (req.path === "/exchange" && req.method === "POST") ||
+    (req.path === "/node" && req.method === "GET")
+  ) {
+    // Populate res.locals.user from the session when present; otherwise let
+    // the route decide (peer mode validates Basic auth itself).
+    if (req.session?.userId) return requireAuth(req, res, next);
+    return next();
+  }
+  return requireAuth(req, res, next);
+});
+router.use((req, res, next) => {
+  if (
+    (req.path === "/exchange" && req.method === "POST") ||
+    (req.path === "/node" && req.method === "GET")
+  ) {
+    return next();
+  }
+  return requireRole("admin")(req, res, next);
+});
 
 // GET /api/sync/node — stable identity and the node's current vector.
-router.get("/node", async (_req, res) => {
+router.get("/node", async (req, res) => {
   try {
+    // Session admin (web UI) or Basic-auth peer (orchestrator pre-flight).
+    if (!res.locals.user) {
+      const credentials = await credentialsFromRequest(req);
+      if (!credentials) {
+        res.status(401).json({ error: "مصادقة الخادم الآخر مطلوبة (Basic)" });
+        return;
+      }
+      const peerAdmin = await authenticatePeer(credentials.username, credentials.password);
+      if (!peerAdmin) {
+        res.status(401).json({ error: "بيانات دخول الخادم الآخر غير صحيحة" });
+        return;
+      }
+    }
     res.json(await getSyncNode());
   } catch (error) {
     res.status(400).json({ error: errorMessage(error) });
@@ -223,7 +273,9 @@ router.get("/conflicts", async (req, res) => {
   const status = ["open", "resolved", "deferred", "all"].includes(requested)
     ? requested as "open" | "resolved" | "deferred" | "all"
     : "open";
-  res.json(await listSyncConflicts(status));
+  const rows = await listSyncConflicts(status);
+  // Flatten: { conflict, change } → conflict fields + nested change row.
+  res.json(rows.map((row) => ({ ...row.conflict, change: row.change ?? null })));
 });
 
 router.post("/conflicts/:id/resolve", async (req, res) => {
@@ -284,6 +336,285 @@ router.get("/relay/packages/:relayId", async (req, res) => {
 router.delete("/relay/expired", async (_req, res) => {
   const result = await purgeExpiredRelayPackages();
   res.json({ deleted: result.length });
+});
+
+/* ── Networked exchange + package import/export (approved 27-08-2026) ────── */
+
+async function credentialsFromRequest(req: {
+  headers: { authorization?: string };
+}): Promise<{ username: string; password: string } | null> {
+  const header = req.headers.authorization ?? "";
+  if (!header.startsWith("Basic ")) return null;
+  try {
+    const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
+    const separator = decoded.indexOf(":");
+    if (separator < 0) return null;
+    return {
+      username: decoded.slice(0, separator),
+      password: decoded.slice(separator + 1),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function authenticatePeer(
+  username: string,
+  password: string,
+): Promise<{ id: number } | null> {
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.username, username))
+    .limit(1);
+  if (!user || !user.isActive || user.role !== "admin") return null;
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  return valid ? { id: user.id } : null;
+}
+
+async function peerFetch<T>(
+  url: string,
+  username: string,
+  password: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+  };
+  const response = await fetch(url, {
+    method: init.method ?? "GET",
+    headers,
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const data = (await response.json().catch(() => ({}))) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(`استجابة الطرف الآخر ${response.status}: ${data.error ?? "خطأ غير معروف"}`);
+  }
+  return data;
+}
+
+function peerBaseVector(value: unknown): Record<string, number> {
+  const vector =
+    value && typeof value === "object" ? (value as Record<string, number>) : {};
+  const safe: Record<string, number> = {};
+  for (const [key, seq] of Object.entries(vector)) {
+    if (typeof seq === "number" && Number.isSafeInteger(seq) && seq >= 0) {
+      safe[key] = seq;
+    }
+  }
+  return safe;
+}
+
+// POST /api/sync/exchange — dual mode:
+//   A) Orchestrator: { peerUrl, username, password } — pull+push with a remote
+//      server in a single round trip (server-to-server, no CORS involved).
+//   B) Peer: { nodeId, vector, changes, baseVector } + Basic auth — serve the
+//      other side of the exchange.
+router.post("/exchange", async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const local = await getSyncNode();
+
+    if (typeof body.peerUrl === "string" && body.peerUrl) {
+      // ── Orchestrator mode ───────────────────────────────────────────────
+      if (!res.locals.user || res.locals.user.role !== "admin") {
+        res.status(401).json({ error: "جلسة مدير مطلوبة لبدء المزامنة" });
+        return;
+      }
+      const peerUrl = String(body.peerUrl).replace(/\/$/, "");
+      const username = typeof body.username === "string" ? body.username : "";
+      const password = typeof body.password === "string" ? body.password : "";
+      if (!/^https?:\/\//i.test(peerUrl)) {
+        res.status(400).json({ error: "عنوان الخادم الآخر يجب أن يبدأ بـ http(s)://" });
+        return;
+      }
+      if (!username || !password) {
+        res.status(400).json({ error: "بيانات دخول مدير الخادم الآخر مطلوبة" });
+        return;
+      }
+
+      // 1) Learn the peer's identity and vector.
+      const peerNode = await peerFetch<{ nodeId: string; vector: Record<string, number> }>(
+        `${peerUrl}/api/sync/node`,
+        username,
+        password,
+      );
+      // 2) Prepare our changes the peer does not have yet.
+      const outgoing = await prepareOutgoingChanges(peerBaseVector(peerNode.vector));
+      // 3) One round trip: send ours, receive theirs.
+      const peerResponse = await peerFetch<{
+        nodeId: string;
+        vector: Record<string, number>;
+        changes: unknown[];
+        report: { counts?: { received?: number; applied?: number; duplicate?: number; conflicts?: number } };
+        baseVector?: Record<string, number>;
+        lastVector?: Record<string, number>;
+      }>(`${peerUrl}/api/sync/exchange`, username, password, {
+        method: "POST",
+        body: {
+          nodeId: local.nodeId,
+          vector: local.vector,
+          changes: outgoing,
+          baseVector: peerBaseVector(peerNode.vector),
+        },
+      });
+      // 4) Materialize the peer's changes locally.
+      const localReport = await applyIncomingChanges({
+        changes: peerResponse.changes ?? [],
+        baseVector: peerBaseVector(peerResponse.baseVector ?? peerNode.vector),
+        lastVector: peerBaseVector(peerResponse.lastVector ?? peerResponse.vector),
+        sourceNodeId: peerNode.nodeId,
+        contextUserId: res.locals.user?.id ?? null,
+      });
+      await auditLog({
+        req,
+        action: "sync_exchange",
+        entityType: "sync_exchange",
+        details: {
+          peerUrl,
+          peerNodeId: peerNode.nodeId,
+          sent: outgoing.length,
+          received: (peerResponse.changes ?? []).length,
+          localApplied: localReport.counts.applied,
+          peerApplied: peerResponse.report?.counts?.applied ?? 0,
+          conflicts: localReport.counts.conflicts,
+        },
+      });
+      res.json({
+        peer: { nodeId: peerNode.nodeId, vector: peerNode.vector },
+        sent: outgoing.length,
+        received: (peerResponse.changes ?? []).length,
+        local: localReport,
+        peerReport: peerResponse.report ?? peerResponse,
+      });
+      return;
+    }
+
+    // ── Peer mode ─────────────────────────────────────────────────────────
+    const credentials = await credentialsFromRequest(req);
+    if (!credentials) {
+      res.status(401).json({ error: "مصادقة الخادم الآخر مطلوبة (Basic)" });
+      return;
+    }
+    const peerAdmin = await authenticatePeer(credentials.username, credentials.password);
+    if (!peerAdmin) {
+      res.status(401).json({ error: "بيانات دخول الخادم الآخر غير صحيحة" });
+      return;
+    }
+    const peerNodeId = typeof body.nodeId === "string" ? body.nodeId : "";
+    if (!peerNodeId) {
+      res.status(400).json({ error: "nodeId الخاص بالطرف الآخر مطلوب" });
+      return;
+    }
+    const report = await applyIncomingChanges({
+      changes: body.changes ?? [],
+      baseVector: peerBaseVector(body.baseVector),
+      lastVector: peerBaseVector(body.lastVector),
+      sourceNodeId: peerNodeId,
+      contextUserId: peerAdmin.id,
+    });
+    const outgoing = await prepareOutgoingChanges(peerBaseVector(body.vector));
+    const vector = await currentVector();
+    res.json({
+      nodeId: local.nodeId,
+      vector,
+      changes: outgoing,
+      report,
+      baseVector: report.baseVector,
+      lastVector: report.lastVector,
+    });
+  } catch (error) {
+    res.status(400).json({ error: errorMessage(error) });
+  }
+});
+
+// POST /api/sync/export — build a .dme-sync package (delta when a base
+// vector is provided, full otherwise) for manual transfer.
+router.post("/export", async (req, res) => {
+  try {
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (password.length < 8) {
+      res.status(400).json({ error: "كلمة مرور الحزمة مطلوبة (8 أحرف على الأقل)" });
+      return;
+    }
+    const baseVector =
+      req.body?.baseVector && typeof req.body.baseVector === "object"
+        ? peerBaseVector(req.body.baseVector)
+        : undefined;
+    const hasBase = baseVector && Object.keys(baseVector).length > 0;
+    const buffer = hasBase
+      ? await createDeltaBackup(password, baseVector)
+      : await createFullBackup(password);
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="damascus-sync-${date}.dme-sync"`,
+    );
+    res.send(buffer);
+    await auditLog({
+      req,
+      action: "sync_package_export",
+      entityType: "sync_package",
+      details: { bytes: buffer.length, delta: hasBase },
+    });
+  } catch (error) {
+    res.status(400).json({ error: errorMessage(error) });
+  }
+});
+
+// POST /api/sync/import — apply a .dme-sync package as a sync operation
+// (change-log replay + business materialization), falling back to a merge
+// restore for records-only packages.
+router.post("/import", async (req, res) => {
+  try {
+    const packageBase64 = typeof req.body?.packageBase64 === "string" ? req.body.packageBase64 : "";
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!packageBase64) {
+      res.status(400).json({ error: "ملف الحزمة مطلوب" });
+      return;
+    }
+    const pkg = decodePackage(packageBase64, password);
+    const manifest = pkg.manifest as Record<string, unknown>;
+    const changes = (pkg.changes ?? []) as unknown[];
+    const baseVector = peerBaseVector(
+      (pkg as { baseVector?: unknown }).baseVector ??
+        (manifest.baseVector ?? (manifest as { lastVector?: unknown }).lastVector ?? {}),
+    );
+    const lastVector = peerBaseVector(
+      (pkg as { lastVector?: unknown }).lastVector ?? (manifest.lastVector ?? {}),
+    );
+    if (changes.length > 0) {
+      const report = await applyIncomingChanges({
+        changes,
+        baseVector,
+        lastVector,
+        sourceNodeId: String(manifest.sourceNodeId ?? "unknown"),
+        contextUserId: res.locals.user?.id ?? null,
+      });
+      await auditLog({
+        req,
+        action: "sync_package_import",
+        entityType: "sync_package",
+        details: { packageType: manifest.packageType, report: report.counts },
+      });
+      res.json({ mode: "sync-apply", report, summary: packageSummary(pkg) });
+      return;
+    }
+    // Records-only package (legacy backup) → merge restore.
+    const report = await applyRestore(pkg, "merge", res.locals.user?.id ?? null);
+    await auditLog({
+      req,
+      action: "sync_package_import_merge",
+      entityType: "sync_package",
+      details: { packageType: manifest.packageType, report: report.counts },
+    });
+    res.json({ mode: "merge-restore", report, summary: packageSummary(pkg) });
+  } catch (error) {
+    res.status(400).json({ error: errorMessage(error) });
+  }
 });
 
 export default router;

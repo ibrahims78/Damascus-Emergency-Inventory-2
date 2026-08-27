@@ -20,6 +20,10 @@ import type {
   SyncPackageDirection,
   SyncSessionStatus,
 } from "@workspace/db";
+import {
+  classifyConflictSeverity as classifySeverity,
+  materializeChanges,
+} from "./sync-apply-service";
 
 type SyncDbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -146,9 +150,10 @@ export type SyncChange = {
   payload: Record<string, unknown>;
   originNodeId: string;
   originSequence: number;
-  causedByChangeId: string | null;
+  causedByChangeId?: string | null;
   parentRevision: string | null;
-  createdAt: string;
+  createdAt?: string | Date | null;
+  status?: string | null;
 };
 
 export type SyncPackageReport = {
@@ -244,7 +249,7 @@ async function getSessionOrThrow(sessionId: string) {
   return session;
 }
 
-async function currentVector(): Promise<SyncVector> {
+export async function currentVector(): Promise<SyncVector> {
   const [identity] = await db
     .select({ nodeId: nodeIdentityTable.nodeId, originSequence: nodeIdentityTable.originSequence })
     .from(nodeIdentityTable)
@@ -444,11 +449,10 @@ function packageChanges(value: unknown): SyncChange[] {
   return value as SyncChange[];
 }
 
-export function classifyConflictSeverity(conflictCode: string): "low" | "medium" | "high" | "critical" {
-  if (conflictCode.includes("BALANCE") || conflictCode.includes("CUSTODY")) return "critical";
-  if (conflictCode.includes("DELETE") || conflictCode.includes("DOCUMENT")) return "high";
-  if (conflictCode.includes("PAYLOAD") || conflictCode.includes("REVISION")) return "medium";
-  return "low";
+export function classifyConflictSeverity(
+  conflictCode: string,
+): "low" | "medium" | "high" | "critical" {
+  return classifySeverity(conflictCode);
 }
 
 export async function applySyncPackage(input: {
@@ -573,7 +577,7 @@ export async function applySyncPackage(input: {
         originSequence: change.originSequence,
         causedByChangeId: change.causedByChangeId ?? null,
         parentRevision: change.parentRevision ?? null,
-        createdAt: new Date(change.createdAt),
+        createdAt: change.createdAt ? new Date(change.createdAt) : new Date(),
         receivedAt: new Date(),
         appliedAt: new Date(),
         status: "applied",
@@ -607,6 +611,23 @@ export async function applySyncPackage(input: {
       );
     }
 
+    // ── Business-state materialization (approved 27-08-2026) ──────────────
+    // The engine previously stopped at the change log. Incoming payloads are
+    // now applied to the local business tables; failures are recorded as
+    // conflicts and surfaced in the UI for an explicit decision.
+    const materialized = await materializeChanges(tx, newChanges);
+    if (materialized.conflicts.length > 0) {
+      const conflictChangeIds = new Set(
+        materialized.conflicts.map((conflict) => conflict.changeId),
+      );
+      for (const changeId of conflictChangeIds) {
+        await tx
+          .update(syncChangeLogTable)
+          .set({ status: "conflict", appliedAt: new Date() })
+          .where(eq(syncChangeLogTable.changeId, changeId));
+      }
+    }
+
     const nextVector = mergeVector(
       Object.fromEntries(currentByOrigin.entries()),
       lastVector,
@@ -620,9 +641,9 @@ export async function applySyncPackage(input: {
       });
     const counts = {
       received: changes.length,
-      applied: newChanges.length,
+      applied: materialized.applied,
       duplicate,
-      conflicts,
+      conflicts: materialized.conflicts.length,
       rejected: 0,
     };
     const result: SyncPackageReport = {
@@ -631,7 +652,7 @@ export async function applySyncPackage(input: {
       counts,
       baseVector,
       lastVector: nextVector,
-      status: conflicts ? "partially-applied" : "applied",
+      status: conflicts > 0 || materialized.conflicts.length > 0 ? "partially-applied" : "applied",
     };
     await tx
       .insert(syncSessionPackageTable)
@@ -645,21 +666,28 @@ export async function applySyncPackage(input: {
         lastVector,
         changes,
         contentHash: input.contentHash,
-        status: conflicts ? "failed" : "applied",
+        status: conflicts > 0 || materialized.conflicts.length > 0 ? "failed" : "applied",
         report: result,
       })
       .onConflictDoUpdate({
         target: syncSessionPackageTable.packageId,
-        set: { status: conflicts ? "failed" : "applied", report: result, updatedAt: new Date() },
+        set: {
+          status: conflicts > 0 || materialized.conflicts.length > 0 ? "failed" : "applied",
+          report: result,
+          updatedAt: new Date(),
+        },
       });
     await tx
       .update(syncSessionTable)
       .set({
-        status: conflicts ? "partially-applied" : "transferring",
+        status: conflicts > 0 || materialized.conflicts.length > 0 ? "partially-applied" : "transferring",
         targetVector: nextVector,
         targetLastVector: nextVector,
         updatedAt: new Date(),
-        lastError: conflicts ? "OPERATION_PAYLOAD_MISMATCH" : null,
+        lastError:
+          conflicts > 0 || materialized.conflicts.length > 0
+            ? materialized.conflicts[0]?.code ?? "OPERATION_PAYLOAD_MISMATCH"
+            : null,
       })
       .where(eq(syncSessionTable.sessionId, input.sessionId));
     return result;
@@ -720,4 +748,227 @@ export async function getSyncPackage(packageId: string) {
     .limit(1);
   if (!pkg) throw new Error("SYNC_PACKAGE_NOT_FOUND");
   return pkg;
+}
+
+/* ── Session-independent exchange primitives (approved 27-08-2026) ──────── */
+
+/**
+ * Changes this node should send to a peer whose knowledge is described by
+ * `peerVector` — every non-rejected change beyond the peer's vector, ordered
+ * by (originNodeId, originSequence) for deterministic application.
+ */
+export async function prepareOutgoingChanges(
+  peerVector: SyncVector,
+): Promise<SyncChange[]> {
+  const rows = await db
+    .select()
+    .from(syncChangeLogTable)
+    .orderBy(asc(syncChangeLogTable.originNodeId), asc(syncChangeLogTable.originSequence));
+  return rows
+    .filter(
+      (row) =>
+        row.status !== "rejected" &&
+        row.originSequence > (peerVector[row.originNodeId] ?? 0),
+    )
+    .map(changeToContract);
+}
+
+/**
+ * Apply a peer's changes with the same guarantees as a session package
+ * (operation-id dedup, sequence validation, recording, materialization,
+ * cursor update) without requiring a sync session. Returns a report.
+ */
+/** Canonical JSON: recursively sorted keys, so payload equality is robust
+ *  regardless of jsonb re-encoding or canonicalJson key sorting in the
+ *  package format. */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  const parts = Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`);
+  return `{${parts.join(",")}}`;
+}
+
+export async function applyIncomingChanges(input: {
+  changes: unknown;
+  baseVector: unknown;
+  lastVector: unknown;
+  sourceNodeId: string;
+  contextUserId?: number | null;
+}): Promise<SyncPackageReport> {
+  const changes = packageChanges(input.changes);
+  const baseVector = asVector(input.baseVector);
+  const lastVector = asVector(input.lastVector);
+
+  const report = await db.transaction(async (tx) => {
+    const existingRows = await tx.select().from(syncChangeLogTable);
+    const existingByOperation = new Map(existingRows.map((row) => [row.operationId, row]));
+    const existingByChangeId = new Map(existingRows.map((row) => [row.changeId, row]));
+    const currentByOrigin = new Map<string, number>();
+    for (const row of existingRows) {
+      currentByOrigin.set(
+        row.originNodeId,
+        Math.max(currentByOrigin.get(row.originNodeId) ?? 0, row.originSequence),
+      );
+    }
+
+    const newChanges: SyncChange[] = [];
+    let duplicate = 0;
+    let payloadConflicts = 0;
+    let rejected = 0;
+    for (const change of changes) {
+      if (
+        !change?.changeId ||
+        !change.operationId ||
+        !change.originNodeId ||
+        !Number.isSafeInteger(change.originSequence) ||
+        change.originSequence < 1
+      ) {
+        throw new Error("SYNC_CHANGE_INVALID");
+      }
+      // A change rejected on its origin node must never be applied.
+      if (change.status === "rejected") {
+        rejected++;
+        continue;
+      }
+      const existing = existingByOperation.get(change.operationId) ?? existingByChangeId.get(change.changeId);
+      if (existing) {
+        if (
+          existing.entityGlobalId !== change.entityGlobalId ||
+          stableStringify(existing.payload ?? {}) !== stableStringify(change.payload ?? {})
+        ) {
+          payloadConflicts++;
+          await tx
+            .update(syncChangeLogTable)
+            .set({ status: "conflict" as SyncChangeStatus, rejectionCode: "OPERATION_PAYLOAD_MISMATCH" })
+            .where(eq(syncChangeLogTable.changeId, existing.changeId));
+          await tx
+            .insert(syncConflictTable)
+            .values({
+              changeId: existing.changeId,
+              conflictCode: "OPERATION_PAYLOAD_MISMATCH",
+              severity: classifySeverity("OPERATION_PAYLOAD_MISMATCH"),
+              details: { incomingChangeId: change.changeId, operationId: change.operationId },
+            })
+            .onConflictDoNothing();
+        } else {
+          duplicate++;
+          await tx
+            .insert(syncInboxTable)
+            .values({ changeId: change.changeId, originNodeId: change.originNodeId, status: "duplicate" })
+            .onConflictDoNothing();
+        }
+        continue;
+      }
+      newChanges.push(change);
+    }
+
+    const grouped = new Map<string, SyncChange[]>();
+    for (const change of newChanges) {
+      const group = grouped.get(change.originNodeId) ?? [];
+      group.push(change);
+      grouped.set(change.originNodeId, group);
+    }
+    for (const [originNodeId, group] of grouped) {
+      group.sort((a, b) => a.originSequence - b.originSequence);
+      let expectedSequence = (currentByOrigin.get(originNodeId) ?? 0) + 1;
+      for (const change of group) {
+        if (change.originSequence !== expectedSequence) {
+          throw new Error(`SYNC_SEQUENCE_GAP:${originNodeId}:${expectedSequence}`);
+        }
+        expectedSequence++;
+      }
+    }
+
+    for (const change of newChanges) {
+      await tx.insert(syncChangeLogTable).values({
+        changeId: change.changeId,
+        operationId: change.operationId,
+        entityType: change.entityType,
+        entityGlobalId: change.entityGlobalId,
+        localEntityId: change.localEntityId ?? null,
+        changeType: change.changeType,
+        payload: change.payload,
+        originNodeId: change.originNodeId,
+        originSequence: change.originSequence,
+        causedByChangeId: change.causedByChangeId ?? null,
+        parentRevision: change.parentRevision ?? null,
+        createdAt: change.createdAt ? new Date(change.createdAt) : new Date(),
+        receivedAt: new Date(),
+        appliedAt: new Date(),
+        status: "applied",
+      });
+      await tx
+        .insert(syncInboxTable)
+        .values({
+          changeId: change.changeId,
+          originNodeId: change.originNodeId,
+          status: "applied",
+          appliedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: syncInboxTable.changeId,
+          set: { status: "applied", appliedAt: new Date(), rejectionCode: null },
+        });
+      if (change.changeType === "delete") {
+        await tx
+          .insert(syncTombstoneTable)
+          .values({
+            entityType: change.entityType,
+            entityGlobalId: change.entityGlobalId,
+            deletedByChangeId: change.changeId,
+            originNodeId: change.originNodeId,
+          })
+          .onConflictDoNothing();
+      }
+      currentByOrigin.set(
+        change.originNodeId,
+        Math.max(currentByOrigin.get(change.originNodeId) ?? 0, change.originSequence),
+      );
+    }
+
+    const materialized = await materializeChanges(tx, newChanges, input.contextUserId ?? null);
+    if (materialized.conflicts.length > 0) {
+      for (const conflict of materialized.conflicts) {
+        await tx
+          .update(syncChangeLogTable)
+          .set({ status: "conflict", appliedAt: new Date() })
+          .where(eq(syncChangeLogTable.changeId, conflict.changeId));
+      }
+    }
+
+    const nextVector = mergeVector(
+      Object.fromEntries(currentByOrigin.entries()),
+      lastVector,
+    );
+    await tx
+      .insert(syncCursorTable)
+      .values({ peerNodeId: input.sourceNodeId, vector: nextVector })
+      .onConflictDoUpdate({
+        target: syncCursorTable.peerNodeId,
+        set: { vector: nextVector, updatedAt: new Date() },
+      });
+    const counts = {
+      received: changes.length,
+      applied: materialized.applied,
+      duplicate,
+      conflicts: materialized.conflicts.length + payloadConflicts,
+      rejected,
+    };
+    return {
+      packageId: `exchange-${randomUUID()}`,
+      contentHash: "",
+      counts,
+      baseVector,
+      lastVector: nextVector,
+      status: (
+        materialized.conflicts.length > 0 || payloadConflicts > 0
+          ? "partially-applied"
+          : "applied"
+      ) as SyncPackageReport["status"],
+    };
+  });
+  return report;
 }
