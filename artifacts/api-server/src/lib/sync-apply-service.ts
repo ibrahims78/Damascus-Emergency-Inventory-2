@@ -18,7 +18,7 @@
  *    password and admins reset it locally.
  */
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import {
   db,
@@ -327,6 +327,7 @@ async function upsertRow(
   changeType: string,
   row: Record<string, unknown>,
   refsOverride?: Record<string, string>,
+  opts?: { viaMovement?: boolean },
 ): Promise<{ localId: number; created: boolean }> {
   const registry = TABLE_REGISTRY[entityType];
   if (!registry) {
@@ -363,6 +364,30 @@ async function upsertRow(
   const values = pickColumns(registry, cleaned);
 
   if (existing !== null) {
+    // Legacy-client guard (approved plan decision 3.2): a STANDALONE
+    // equipment update that changes quantity did not travel as a documented
+    // movement — reject it explicitly so the "no balance change without a
+    // movement" invariant holds even for old distributed clients. Updates
+    // that arrived as movement-sanctioned effects (viaMovement) and
+    // first-time inserts are exempt.
+    if (
+      entityType === "equipment" &&
+      !opts?.viaMovement &&
+      changeType === "update" &&
+      values.quantity !== undefined &&
+      values.quantity !== null
+    ) {
+      const [local] = await tx
+        .select({ quantity: equipmentTable.quantity })
+        .from(equipmentTable)
+        .where(eq(equipmentTable.id, existing as number));
+      if (local && Number(local.quantity) !== Number(values.quantity)) {
+        throw new MaterializeError(
+          "LEGACY_EQUIPMENT_QUANTITY_REJECTED",
+          "تعديل كمية التجهيز من إصدار قديم غير مقبول؛ استخدم تسوية الجرد من الإصدار الجديد",
+        );
+      }
+    }
     await tx
       .update(table)
       .set(values as never)
@@ -585,6 +610,88 @@ async function materializeTransactionBundle(
     (a, b) => (rank[a.entityType] ?? 5) - (rank[b.entityType] ?? 5),
   );
 
+  // Concurrent-adjustment policy (approved plan phase 8): when an incoming
+  // `adjust` movement for equipment lands on a local quantity that diverged
+  // from the movement's assumed starting point, the temporally newest
+  // adjustment wins and the divergence is RECORDED — never a silent
+  // replacement. A stale incoming adjustment keeps the local quantity.
+  if (resolved.type === "adjust" && equipmentGlobalId) {
+    const equipmentEffect = (payload.effects ?? []).find(
+      (effect) => effect.entityType === "equipment",
+    );
+    if (equipmentEffect) {
+      const localEquipment = await resolveGlobalId(tx, "equipment", equipmentGlobalId);
+      if (localEquipment !== null) {
+        const details = (txRow.details ?? null) as
+          | { previousStock?: unknown; newStock?: unknown }
+          | null;
+        const [localEq] = await tx
+          .select({ quantity: equipmentTable.quantity })
+          .from(equipmentTable)
+          .where(eq(equipmentTable.id, localEquipment));
+        const previousStock =
+          details?.previousStock === undefined || details?.previousStock === null
+            ? null
+            : Number(details.previousStock);
+        if (
+          localEq &&
+          previousStock !== null &&
+          Number.isFinite(previousStock) &&
+          Number(localEq.quantity) !== previousStock
+        ) {
+          const [localLast] = await tx
+            .select({
+              createdAt: transactionsTable.createdAt,
+              documentNumber: transactionsTable.documentNumber,
+            })
+            .from(transactionsTable)
+            .where(
+              and(
+                eq(transactionsTable.equipmentId, localEquipment),
+                eq(transactionsTable.type, "adjust"),
+                ne(transactionsTable.id, localTransactionId),
+              ),
+            )
+            .orderBy(desc(transactionsTable.createdAt), desc(transactionsTable.id))
+            .limit(1);
+          const incomingAt =
+            values.createdAt instanceof Date
+              ? values.createdAt.getTime()
+              : new Date(String(values.createdAt ?? 0)).getTime() || 0;
+          const localAt = localLast?.createdAt
+            ? new Date(localLast.createdAt).getTime()
+            : 0;
+          const winner = incomingAt >= localAt ? "incoming" : "local";
+          if (winner === "local") {
+            // Keep the newer local quantity; the rest of the snapshot still
+            // applies (metadata corrections travel with the movement).
+            equipmentEffect.row = {
+              ...equipmentEffect.row,
+              quantity: Number(localEq.quantity),
+            };
+          }
+          await tx
+            .insert(syncConflictTable)
+            .values({
+              changeId: change.changeId,
+              conflictCode: "CONCURRENT_ADJUSTMENT",
+              severity: "medium",
+              details: {
+                equipmentGlobalId,
+                localQuantityAtApply: Number(localEq.quantity),
+                incomingPreviousStock: previousStock,
+                incomingNewStock: details?.newStock ?? null,
+                incomingDocumentNumber: String(values.documentNumber ?? ""),
+                localLastAdjustDocument: localLast?.documentNumber ?? null,
+                winner,
+              },
+            })
+            .onConflictDoNothing();
+        }
+      }
+    }
+  }
+
   for (const effect of orderedEffects) {
     await upsertRow(
       tx,
@@ -592,6 +699,8 @@ async function materializeTransactionBundle(
       effect.entityGlobalId,
       effect.changeType,
       effect.row,
+      undefined,
+      { viaMovement: true },
     );
   }
 

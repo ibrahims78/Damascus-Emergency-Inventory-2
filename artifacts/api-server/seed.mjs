@@ -31,7 +31,7 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   logLevel: "warning",
 });
 
-execSync(`node --enable-source-maps ${path.resolve(artifactDir, "dist/seed.mjs")}`, {
+execSync(`node --enable-source-maps "${path.resolve(artifactDir, "dist/seed.mjs")}"`, {
   stdio: "inherit",
   cwd: artifactDir,
 });

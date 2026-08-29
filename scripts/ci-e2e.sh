@@ -37,6 +37,8 @@ boot_seed_boot() {
   DAMASCUS_DATA_DIR="$data_dir" PORT="$port" $API >/tmp/dme-api.log 2>&1 &
 }
 
+(cd artifacts/api-server && node build-seed.mjs)
+
 boot_seed_boot 8080 "$DATA_A"
 PID_A=$!
 boot_seed_boot 8081 "$DATA_B"

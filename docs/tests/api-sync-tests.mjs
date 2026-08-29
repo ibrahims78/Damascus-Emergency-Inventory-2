@@ -340,6 +340,71 @@ await t('delta item deactivated on B', async () => {
   return !it || it.isActive === false ? true : { isActive: it.isActive, found: !!it };
 });
 
+// ── Phase 8: adjustment movements travel through sync ────────────────────────
+const adjustItem = `تسوية-مزامنة-${suffix}`;
+await t('A creates an item for the adjustment phase (stock 12)', async () => {
+  const r = await A1.api('/api/items', { method: 'POST', body: JSON.stringify({ name: adjustItem, itemType: 'item', unit: 'قطعة', currentStock: 12 }) });
+  return r.status === 201 ? true : r;
+});
+let exchange7b;
+await t('exchange #7b syncs the adjustment item to B', async () => {
+  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: ADMIN_PW }) });
+  if (r.status !== 200) return r;
+  exchange7b = r.body;
+  const it = findItem(await listItems(B1), adjustItem);
+  return it && Number(it.currentStock) === 12 ? true : { stock: it?.currentStock };
+});
+await t('A documents an adjustment (newStock 7) on the synced item', async () => {
+  const it = findItem(await listItems(A1), adjustItem);
+  if (!it) return { missing: 'adjust item on A' };
+  const r = await A1.api('/api/transactions/adjust', {
+    method: 'POST',
+    body: JSON.stringify({
+      itemType: 'item',
+      itemId: it.id,
+      newStock: 7,
+      documentDate: new Date().toISOString().slice(0, 10),
+      reason: 'اختبار مزامنة حركة التسوية',
+    }),
+  });
+  return r.status === 201 ? true : r;
+});
+await t('exchange #8 propagates the adjustment', async () => {
+  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: ADMIN_PW }) });
+  if (r.status !== 200) return r;
+  const it = findItem(await listItems(B1), adjustItem);
+  if (!it || Number(it.currentStock) !== 7) return { stock: it?.currentStock };
+  const txs = (await B1.api('/api/transactions?limit=20')).body?.transactions || [];
+  const adjust = txs.find((x) => x.type === 'adjust' && Number(x.itemId) === it.id);
+  return adjust ? true : { missing: 'adjust transaction on B' };
+});
+await t('exchange #9 (re-delivery) does not double-apply the adjustment', async () => {
+  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: ADMIN_PW }) });
+  if (r.status !== 200) return r;
+  const it = findItem(await listItems(B1), adjustItem);
+  return it && Number(it.currentStock) === 7 ? true : { stock: it?.currentStock };
+});
+await t('A documents a second adjustment (newStock 9)', async () => {
+  const it = findItem(await listItems(A1), adjustItem);
+  if (!it) return { missing: 'adjust item on A' };
+  const r = await A1.api('/api/transactions/adjust', {
+    method: 'POST',
+    body: JSON.stringify({
+      itemType: 'item',
+      itemId: it.id,
+      newStock: 9,
+      documentDate: new Date().toISOString().slice(0, 10),
+      reason: 'اختبار مزامنة تسوية ثانية',
+    }),
+  });
+  return r.status === 201 ? true : r;
+});
+await t('exchange #10 converges B to the second adjustment (stock 9)', async () => {
+  const r = await A1.api('/api/sync/exchange', { method: 'POST', body: JSON.stringify({ peerUrl: B, username: 'admin', password: ADMIN_PW }) });
+  if (r.status !== 200) return r;
+  const it = findItem(await listItems(B1), adjustItem);
+  return it && Number(it.currentStock) === 9 ? true : { stock: it?.currentStock };
+});
 console.log(`\n═══ SYNC RESULTS: ${results.pass} passed, ${results.fail} failed ═══`);
 if (results.failures.length) {
   console.log('\nFailures:');

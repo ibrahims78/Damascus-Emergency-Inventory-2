@@ -11,7 +11,8 @@
     "protected:keygen": "node scripts/generate-protected-key.mjs",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "lint": "eslint artifacts lib"
+    "lint": "eslint artifacts lib",
+    "test": "vitest run"
   },
   "private": true,
   "dependencies": {
@@ -22,6 +23,7 @@
     "eslint": "^9.39.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "typescript-eslint": "^8.40.0",
+    "vitest": "^3.2.4",
     "@capacitor/android": "^7.4.4",
     "@capacitor/cli": "^7.4.4",
     "@capacitor/core": "^7.4.4",
