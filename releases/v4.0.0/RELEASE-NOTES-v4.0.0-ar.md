@@ -14,10 +14,10 @@ releases/v4.0.0/
 │   ├── Damascus-Emergency-Inventory-v4.0.0-Windows-Protected.zip   ← النسخة المحمية (تفعيل بترخيص)
 │   └── SHA256SUMS                                                   ← بصمات التحقق
 ├── android/
-│   ├── Damascus-...-Android-WebBundle-Offline.zip                  ← حزمة ويب الأوفلاين العادية (جاهزة لـ cap sync)
-│   ├── Damascus-...-Android-WebBundle-Protected.zip                ← حزمة ويب الأوفلاين المحمية (بوابة التفعيل)
-│   ├── build-android-apk.ps1                                        ← بناء APK بأمر واحد (جهاز به Android Studio)
-│   ├── README-android-ar.txt                                        ← خطوات البناء والسبب
+│   ├── Damascus-...-Android-Offline.apk                            ← ✅ APK أندرويد v4.0.0 عادي (أوفلاين، موقّع v1+v2)
+│   ├── Damascus-...-Android-Protected.apk                          ← ✅ APK أندرويد v4.0.0 محمي (بوابة التفعيل، موقّع)
+│   ├── build-android-apk.ps1                                        ← سكربت إعادة البناء (للمرجع)
+│   ├── SignApk.java + VerifyApk.java                                ← أدوات التوقيع والتحقق (apksig)
 │   └── SHA256SUMS
 ├── license-public-keys/                                             ← المفاتيح العامة (قابلة للنشر)
 │   ├── windows.pem / windows.b64   (keyId 769e2865cd0d57f3)
@@ -34,11 +34,12 @@ releases/v4.0.0/
 - **النسخة المحمية:** نفس الحزمة + **بوابة تفعيل Ed25519** (منصة windows) مدمجة بمفتاح ويندوز العام (keyId `769e2865cd0d57f3`) — تشغيل أول يعرض شاشة تفعيل بمعرّف الجهاز، والترخيص يُصدر من أداة `scripts/issue-license.mjs` بالمفتاح الخاص (دى مزوّد النظام).
 - **تحقق إقلاع فعلي:** الحزمتان أُطلقتا من الاستخراج — 4 عمليات إلكترونية لكل نسخة + تهيئة PGlite (1299+ ملف userData) ✅
 
-## أندرويد — الحزم الجاهزة والبناء
+## أندرويد — APK v4.0.0 (عادي + محمي) — تم البناء والتوقيع ✅
 
-- حزمتا الويب (عادي/محمي) **مبنيتان وجاهزتان** لـ Capacitor (الوضع دون اتصال IndexedDB).
-- بناء APK يتطلب Java 17 + Android SDK — **غير متوفرين على جهاز البناء الحالي**؛ السكربت `build-android-apk.ps1` ينفذ كل الخطوات بأمر واحد على أي جهاز به Android Studio، شاملاً توقيع الإصدار عبر `RELEASE_KEYSTORE_*`.
-- مفاتيح تفعيل أندرويد جاهزة: العام مثبّت في حزمة الويب المحمية، والخاص لدى مزوّد النظام.
+- **الطريقة نفسها**: نفس حاوية Capacitor (classes.dex bridge) بجلبها من APK v3.0.1 المرجعي، مع **استبدال حزمة الويب داخل assets/public ببناء v4.0.0** وترقية versionName إلى 4.0.0 / versionCode إلى 400 (apktool).
+- **التوقيع**: مفتاح إصدار RSA-2048 خاص (keystore في release-secrets/android/) + توقيع **v1+v2** عبر مكتبة apksig — التحقق: `verified=true v1=true v2=true` للنسختين.
+- **النسخة المحمية**: حزمة الويب المحمية (بوابة تفعيل Ed25519 بمفتاح أندرويد keyId da2fb74422708bcb) — تشغيل أول يعرض شاشة تفعيل بمعرّف الجهاز، والترخيص من scripts/issue-license.mjs --platform android.
+- **أدوات البناء المرفقة**: SignApk.java (توقيع) + VerifyApk.java (تحقق) لسهولة إعادة البناء على أي جهاز به JDK 17.
 
 ## سلسلة التفعيل (النسخة المحمية) — مُختبرة من طرف إلى طرف
 
