@@ -105,6 +105,10 @@ async function verifyEd25519Fallback(
     const spki = base64ToBytes(publicKeySpkiB64);
     const rawKey = spki.slice(spki.length - 32);
     const sig = base64ToBytes(signatureB64);
+    // A corrupted/truncated paste must read as "invalid" (bad license), not
+    // "unsupported" (missing crypto capability) — so length problems are
+    // rejected here before the library can throw on them.
+    if (sig.length !== 64) return false;
     return await ed25519.verifyAsync(sig, new TextEncoder().encode(canonical), rawKey);
   } catch {
     return null;

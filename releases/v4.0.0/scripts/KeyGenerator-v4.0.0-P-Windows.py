@@ -251,15 +251,20 @@ def main():
 
         license_str, payload = issue_license(device_id, expires_iso)
 
+        out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"license-{device_id}.txt")
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(license_str + "\n")
+
         print()
         print("  Generated activation license:")
         print()
         print(f"    {license_str}")
         print()
-        log_issued(device_id, payload["licenseId"], expires_iso)
-        print("  [OK] Issued and logged. Send the license string to the client")
-        print("       — it is pasted as-is into the activation screen.")
+        print(f"  [OK] Saved to: {out_path}")
+        print("  [!] Send the FILE to the client - do not retype the string.")
+        print("      (console wrapping can corrupt a manual copy)")
         print()
+        log_issued(device_id, payload["licenseId"], expires_iso)
 
 
 if __name__ == "__main__":
