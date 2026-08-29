@@ -136,8 +136,26 @@ async function copySessionTableSql() {
   await copyFile(pgSimplePkg, path.resolve(outputDir, "table.sql"));
 }
 
+// Copy PGlite wasm/data runtime assets (desktop mode loads them from the
+// bundle directory at boot - the wasm is the database engine, the data file
+// carries the Postgres data directory).
+async function copyPgliteAssets() {
+  const { copyFile } = await import("node:fs/promises");
+  const { createRequire } = await import("node:module");
+  const req = createRequire(import.meta.url);
+  const pgliteMain = req.resolve("@electric-sql/pglite");
+  const pgliteDist = path.dirname(pgliteMain);
+  const outputDir = path.resolve(
+    artifactDir,
+    process.env.API_BUILD_OUTPUT_DIR ?? "dist",
+  );
+  await copyFile(path.join(pgliteDist, "pglite.wasm"), path.resolve(outputDir, "pglite.wasm"));
+  await copyFile(path.join(pgliteDist, "pglite.data"), path.resolve(outputDir, "pglite.data"));
+}
+
 buildAll()
   .then(() => copySessionTableSql())
+  .then(() => copyPgliteAssets())
   .catch((err) => {
     console.error(err);
     process.exit(1);
