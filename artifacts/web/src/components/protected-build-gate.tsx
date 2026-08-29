@@ -107,6 +107,7 @@ export function ProtectedBuildGate({ children }: { children: React.ReactNode }) 
           placeholder="eyJ... .signature..."
           className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-slate-100 outline-none focus:border-sky-500"
         />
+        <p className="mt-3 text-center text-[10px] text-slate-600" dir="ltr">Gate 4.0.0.2 - noble-ed25519 fallback</p>
         {result && (
           <p className="mt-3 rounded-lg bg-red-950/50 p-3 text-sm text-red-300">{statusMessage(result)}</p>
         )}
