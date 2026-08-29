@@ -69,3 +69,8 @@ attached_assets/
 # local PGlite data directory (created at runtime)
 .damascus-data/
 
+
+# v4.0.0 release binaries stay local (checksums + notes are tracked)
+releases/v4.0.0/windows/*.zip
+releases/v4.0.0/android/*.apk
+releases/v4.0.0/android/*WebBundle*.zip

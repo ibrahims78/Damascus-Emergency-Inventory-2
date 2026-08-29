@@ -1,4 +1,6 @@
 import express, { type Express } from "express";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
@@ -135,6 +137,19 @@ app.use(
 );
 
 app.use("/api", csrfProtect, router);
+
+// Optional static web serving for portable/desktop releases: when WEB_DIST
+// points at a built web bundle, the API serves it on the same port (single-
+// port offline operation) with an SPA fallback for client-side routing.
+const webDistRoot = process.env.WEB_DIST;
+if (webDistRoot) {
+  app.use(express.static(webDistRoot, { index: "index.html" }));
+  app.use((req, res, next) => {
+    if (req.method !== "GET" || req.path.startsWith("/api")) return next();
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.end(readFileSync(join(webDistRoot, "index.html")));
+  });
+}
 
 // Start background alert worker (checks inventory every 2 h, runs once on boot)
 startAlertWorker();

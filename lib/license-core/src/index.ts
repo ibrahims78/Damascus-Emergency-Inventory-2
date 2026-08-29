@@ -100,10 +100,10 @@ export function decodeLicense(value: string): SignedLicense | null {
   }
 }
 
-async function importPublicKey(): Promise<CryptoKey> {
+async function importPublicKey(publicKeySpkiBase64?: string): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     "spki",
-    base64ToBytes(LICENSE_PUBLIC_KEY_SPKI_BASE64) as BufferSource,
+    base64ToBytes(publicKeySpkiBase64 ?? LICENSE_PUBLIC_KEY_SPKI_BASE64) as BufferSource,
     { name: "Ed25519" } as AlgorithmIdentifier,
     false,
     ["verify"],
@@ -112,7 +112,13 @@ async function importPublicKey(): Promise<CryptoKey> {
 
 export async function verifyLicense(
   encoded: string | null | undefined,
-  expected: { platform: LicensePlatform; deviceId: string; appVersion?: string },
+  expected: {
+    platform: LicensePlatform;
+    deviceId: string;
+    appVersion?: string;
+    /** Per-platform pinned key override (release builds inject their platform key). */
+    publicKeySpkiBase64?: string;
+  },
 ): Promise<LicenseResult> {
   if (!encoded) return { status: "missing" };
   const decoded = decodeLicense(encoded);
@@ -131,7 +137,7 @@ export async function verifyLicense(
   try {
     const valid = await crypto.subtle.verify(
       { name: "Ed25519" } as AlgorithmIdentifier,
-      await importPublicKey(),
+      await importPublicKey(expected.publicKeySpkiBase64),
       base64ToBytes(signature) as BufferSource,
       new TextEncoder().encode(canonicalJson(payload)),
     );

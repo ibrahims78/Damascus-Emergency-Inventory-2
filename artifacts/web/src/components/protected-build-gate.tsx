@@ -7,6 +7,8 @@ import {
 } from "../../../../lib/license-core/src/index";
 
 const DEVICE_STORAGE_KEY = "damascus-ems.protected.device-id";
+const LICENSE_PLATFORM = ((import.meta.env.VITE_LICENSE_PLATFORM ?? "android") as "android" | "windows");
+const LICENSE_PUBLIC_KEY = (import.meta.env.VITE_LICENSE_PUBLIC_KEY ?? "") || undefined;
 const LICENSE_STORAGE_KEY = "damascus-ems.protected.license";
 
 function statusMessage(result: LicenseResult): string {
@@ -29,7 +31,7 @@ export function ProtectedBuildGate({ children }: { children: React.ReactNode }) 
     const saved = window.localStorage.getItem(LICENSE_STORAGE_KEY) ?? "";
     setDeviceId(id);
     setLicense(saved);
-    verifyLicense(saved, { platform: "android", deviceId: id, appVersion: import.meta.env.VITE_APP_VERSION ?? "*" })
+    verifyLicense(saved, { platform: LICENSE_PLATFORM, deviceId: id, appVersion: import.meta.env.VITE_APP_VERSION ?? "*", publicKeySpkiBase64: LICENSE_PUBLIC_KEY })
       .then(setResult)
       .finally(() => setChecking(false));
   }, []);
@@ -48,8 +50,8 @@ export function ProtectedBuildGate({ children }: { children: React.ReactNode }) 
     setActivating(true);
     const next = license.trim();
     const checked = await verifyLicense(next, {
-      platform: "android",
-      deviceId,
+      platform: LICENSE_PLATFORM,
+      deviceId, publicKeySpkiBase64: LICENSE_PUBLIC_KEY,
       appVersion: import.meta.env.VITE_APP_VERSION ?? "*",
     });
     if (checked.status === "valid") {
