@@ -88,6 +88,29 @@ export function encodeLicense(value: SignedLicense): string {
   return `${btoa(canonicalJson(value.payload))}.${value.signature}`;
 }
 
+import * as ed25519 from "@noble/ed25519";
+
+// Noble needs an SHA-512 implementation — WebCrypto SHA-512 is available in
+// every environment (unlike Ed25519 itself, which older Chromium/WebView2
+// builds lack).
+ed25519.hashes.sha512Async = async (message: Uint8Array) =>
+  new Uint8Array(await crypto.subtle.digest("SHA-512", message as BufferSource));
+
+async function verifyEd25519Fallback(
+  signatureB64: string,
+  canonical: string,
+  publicKeySpkiB64: string,
+): Promise<boolean | null> {
+  try {
+    const spki = base64ToBytes(publicKeySpkiB64);
+    const rawKey = spki.slice(spki.length - 32);
+    const sig = base64ToBytes(signatureB64);
+    return await ed25519.verifyAsync(sig, new TextEncoder().encode(canonical), rawKey);
+  } catch {
+    return null;
+  }
+}
+
 export function decodeLicense(value: string): SignedLicense | null {
   try {
     const [payloadEncoded, signature] = value.trim().split(".");
@@ -134,15 +157,27 @@ export async function verifyLicense(
     return { status: "expired", license: payload };
   }
 
+  const canonical = new TextEncoder().encode(canonicalJson(payload));
   try {
+    // Fast path: native WebCrypto Ed25519 (modern Chromium/WebView2).
     const valid = await crypto.subtle.verify(
       { name: "Ed25519" } as AlgorithmIdentifier,
       await importPublicKey(expected.publicKeySpkiBase64),
       base64ToBytes(signature) as BufferSource,
-      new TextEncoder().encode(canonicalJson(payload)),
+      canonical,
     );
     return valid ? { status: "valid", license: payload } : { status: "invalid" };
   } catch {
+    // Slow path: pure-JS Ed25519 for environments whose WebCrypto lacks
+    // Ed25519 (older WebView2/Chromium). Returns null when the fallback
+    // itself cannot run.
+    const fallback = await verifyEd25519Fallback(
+      signature,
+      canonicalJson(payload),
+      expected.publicKeySpkiBase64 ?? LICENSE_PUBLIC_KEY_SPKI_BASE64,
+    );
+    if (fallback === true) return { status: "valid", license: payload };
+    if (fallback === false) return { status: "invalid" };
     return { status: "unsupported" };
   }
 }
