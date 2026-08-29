@@ -17,8 +17,34 @@ import hashlib
 import json
 import os
 
-# The release private key lives next to this script (gitignored folder).
-_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "license-private-key.pem")
+# The release private key lives in release-secrets/<platform>/ - the finder
+# below locates it whether the script runs from the secrets folder or from a
+# tracked copy elsewhere in the project.
+PLATFORM_LOWER = "windows"
+
+
+def _find_key_file():
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(here, "license-private-key.pem"),
+        os.path.join(here, PLATFORM_LOWER, "license-private-key.pem"),
+    ]
+    d = here
+    for _i in range(6):
+        candidates.append(os.path.join(d, "release-secrets", PLATFORM_LOWER, "license-private-key.pem"))
+        candidates.append(os.path.join(d, PLATFORM_LOWER, "license-private-key.pem"))
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+_KEY_FILE = _find_key_file()
+_SEED = None
 
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "issued-licenses-windows.log")
 
@@ -112,8 +138,9 @@ def _seed_from_pkcs8_pem(pem_text):
     return der[idx + 2:idx + 34]
 
 
-with open(_KEY_FILE, "r", encoding="utf-8") as _f:
-    _SEED = _seed_from_pkcs8_pem(_f.read())
+if _KEY_FILE:
+    with open(_KEY_FILE, "r", encoding="utf-8") as _f:
+        _SEED = _seed_from_pkcs8_pem(_f.read())
 
 # ---------------------------------------------------------------------------
 # License construction (identical to lib/license-core canonicalJson)
@@ -185,6 +212,17 @@ def main():
             pass
 
     print_header()
+    if _SEED is None:
+        print("  [!] لم يتم العثور على مفتاح التوقيع الخاص (license-private-key.pem)")
+        print("      شغّل المولد من مجلد release-secrets/PLATFORM أو ضع ملف المفتاح")
+        print("      بجانب السكربت ثم أعد المحاولة.")
+        print()
+        print("  Press Enter to exit...")
+        try:
+            input()
+        except Exception:
+            pass
+        return
     print(f"  Issued licenses are appended to: {os.path.basename(LOG_FILE)}")
     print()
 
