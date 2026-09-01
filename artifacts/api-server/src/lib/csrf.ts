@@ -6,7 +6,7 @@ import { type RequestHandler } from "express";
  * sync peers) are not browser CSRF targets and skip the token check.
  */
 const allowedOriginPattern =
-  /^(?:https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?|https:\/\/(?:[a-z0-9-]+\.)+replit\.(?:dev|app))$/i;
+  /^(?:https?:\/\/(?:(?:localhost|127\.0\.0\.1)(?::\d+)?|(?:192\.168|10|172\.(?:1[6-9]|2\d|3[01]))\.\d+\.\d+(?::\d+)?)|https:\/\/(?:[a-z0-9-]+\.)+replit\.(?:dev|app))$/i;
 
 /**
  * Synchronizer-token CSRF protection.

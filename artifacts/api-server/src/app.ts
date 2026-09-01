@@ -73,7 +73,7 @@ app.use(
 // ── CORS: restrict to same-origin and known Replit preview/deployment domains.
 // Preview URLs may include an extra routing label, e.g. *.picard.replit.dev.
 const allowedOriginPattern =
-  /^(?:https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?|https:\/\/(?:[a-z0-9-]+\.)+replit\.(?:dev|app))$/i;
+  /^(?:https?:\/\/(?:(?:localhost|127\.0\.0\.1)(?::\d+)?|(?:192\.168|10|172\.(?:1[6-9]|2\d|3[01]))\.\d+\.\d+(?::\d+)?)|https:\/\/(?:[a-z0-9-]+\.)+replit\.(?:dev|app))$/i;
 app.use(
   cors({
     origin: (origin, callback) => {
