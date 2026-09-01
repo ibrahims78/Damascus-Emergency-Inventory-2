@@ -49,7 +49,7 @@ _SEED = None
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "issued-licenses-android.log")
 
 android = "android"
-APP_VERSION = "4.0.0"
+APP_VERSION = "*"
 
 # ---------------------------------------------------------------------------
 # Pure-Python Ed25519 (RFC 8032) — public-domain reference implementation

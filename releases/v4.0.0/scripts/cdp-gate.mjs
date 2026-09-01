@@ -54,11 +54,7 @@ if (targets.length === 0) {
 const page = targets[0];
 console.log("target:", page.title ?? page.url);
 
-if (action === "readta") { const r = await evaluate(page.webSocketDebuggerUrl, '(async () => {
-  const ta = document.getElementById("protected-license");
-  const val = ta ? ta.value : "(no textarea)";
-  return JSON.stringify({ length: val.length, first40: val.slice(0, 40), last40: val.slice(-40), hasNewline: val.includes("\n"), hasSpace: val.includes(" "), dotCount: (val.match(/\./g) || []).length });
-})()'); console.log(r); } else if (action === "read") {
+if (action === "read") {
   const diag = await evaluate(
     page.webSocketDebuggerUrl,
     `(async () => {

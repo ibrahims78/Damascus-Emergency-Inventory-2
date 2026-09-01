@@ -109,7 +109,12 @@ export function ProtectedBuildGate({ children }: { children: React.ReactNode }) 
         />
         <p className="mt-3 text-center text-[10px] text-slate-600" dir="ltr">Gate 4.0.0.2 - noble-ed25519 fallback</p>
         {result && (
-          <p className="mt-3 rounded-lg bg-red-950/50 p-3 text-sm text-red-300">{statusMessage(result)}</p>
+          <>
+            <p className="mt-3 rounded-lg bg-red-950/50 p-3 text-sm text-red-300">{statusMessage(result)}</p>
+            <p className="mt-2 text-center text-[10px] text-slate-500" dir="ltr">
+              status={result.status} | gate-device={deviceId} | license-device={(result.license?.deviceId as string) ?? "-"} | keyId={(result.license?.keyId as string) ?? "-"}
+            </p>
+          </>
         )}
         <button
           type="button"

@@ -31,7 +31,8 @@ export type LicenseStatus =
   | "expired"
   | "device-mismatch"
   | "platform-mismatch"
-  | "unsupported";
+  | "unsupported"
+  | "version-mismatch";
 
 export type LicenseResult = {
   status: LicenseStatus;
@@ -155,7 +156,7 @@ export async function verifyLicense(
   if (payload.platform !== expected.platform) return { status: "platform-mismatch" };
   if (payload.deviceId !== expected.deviceId) return { status: "device-mismatch" };
   if (expected.appVersion && payload.appVersion !== "*" && payload.appVersion !== expected.appVersion) {
-    return { status: "unsupported" };
+    return { status: "version-mismatch", license: payload };
   }
   if (payload.expiresAt && Date.parse(payload.expiresAt) <= Date.now()) {
     return { status: "expired", license: payload };
@@ -206,6 +207,7 @@ export function formatLicenseError(status: LicenseStatus): string {
     case "device-mismatch": return "الترخيص صادر لجهاز آخر.";
     case "platform-mismatch": return "الترخيص صادر لمنصة أخرى.";
     case "unsupported": return "الترخيص غير متوافق مع إصدار التطبيق.";
+    case "version-mismatch": return "إصدار الترخيص لا يطابق إصدار التطبيق. أعد إصدار الترخيص."
     default: return "";
   }
 }
