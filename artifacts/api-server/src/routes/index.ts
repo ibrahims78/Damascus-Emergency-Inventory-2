@@ -17,6 +17,7 @@ import backupRouter from "./backup";
 import custodiesRouter from "./custodies";
 import backupsRouter from "./backups";
 import syncRouter from "./sync";
+import licenseRouter from "./license";
 
 const router = Router();
 
@@ -38,5 +39,6 @@ router.use("/backup", backupRouter);
 router.use("/custodies", custodiesRouter);
 router.use("/backups", backupsRouter);
 router.use("/sync", syncRouter);
+router.use("/license", licenseRouter);
 
 export default router;

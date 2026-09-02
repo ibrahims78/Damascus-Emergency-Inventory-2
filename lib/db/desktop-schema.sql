@@ -1,4 +1,4 @@
-﻿CREATE TABLE "users" (
+CREATE TABLE "users" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"username" text NOT NULL,
 	"password_hash" text NOT NULL,
@@ -22,15 +22,6 @@ CREATE TABLE "system_settings" (
 "return_conditions" text,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
---> statement-breakpoint
-ALTER TABLE "transactions"
-  ADD COLUMN "operation_id" text,
-  ADD COLUMN "origin_node_id" text,
-  ADD COLUMN "origin_sequence" integer,
-  ADD COLUMN "document_number_scope" text;
---> statement-breakpoint
-CREATE UNIQUE INDEX "transactions_operation_id_unique"
-  ON "transactions" ("operation_id");
 --> statement-breakpoint
 CREATE TABLE "node_identity" (
 "id" serial PRIMARY KEY NOT NULL,
@@ -313,7 +304,12 @@ CREATE TABLE "transactions" (
 	CONSTRAINT "transactions_supply_source_central" CHECK ("transactions"."supply_source" IS NULL OR "transactions"."supply_source" = 'central_warehouses'),
 	CONSTRAINT "transactions_delivery_destination_valid" CHECK ("transactions"."delivery_destination" IS NULL OR "transactions"."delivery_destination" IN ('administrative_building', 'ambulance_point'))
 );
---> statement-breakpoint
+--> statement-breakpoint--> statement-breakpointALTER TABLE "transactions"
+  ADD COLUMN "operation_id" text,
+  ADD COLUMN "origin_node_id" text,
+  ADD COLUMN "origin_sequence" integer,
+  ADD COLUMN "document_number_scope" text;--> statement-breakpointCREATE UNIQUE INDEX "transactions_operation_id_unique"
+  ON "transactions" ("operation_id");--> statement-breakpointALTER TABLE "transactions" ADD CONSTRAINT "transactions_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpointALTER TABLE "transactions" ADD CONSTRAINT "transactions_equipment_id_equipment_id_fk" FOREIGN KEY ("equipment_id") REFERENCES "public"."equipment"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpointALTER TABLE "transactions" ADD CONSTRAINT "transactions_recipient_id_recipients_id_fk" FOREIGN KEY ("recipient_id") REFERENCES "public"."recipients"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpointALTER TABLE "transactions" ADD CONSTRAINT "transactions_exit_reason_id_exit_reasons_id_fk" FOREIGN KEY ("exit_reason_id") REFERENCES "public"."exit_reasons"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpointALTER TABLE "transactions" ADD CONSTRAINT "transactions_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint--> statement-breakpoint
 CREATE TABLE "inventory_batches" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"item_id" integer NOT NULL,
@@ -471,16 +467,6 @@ CREATE TABLE "alerts" (
 );
 --> statement-breakpoint
 ALTER TABLE "items" ADD CONSTRAINT "items_category_id_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."categories"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_equipment_id_equipment_id_fk" FOREIGN KEY ("equipment_id") REFERENCES "public"."equipment"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_recipient_id_recipients_id_fk" FOREIGN KEY ("recipient_id") REFERENCES "public"."recipients"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_exit_reason_id_exit_reasons_id_fk" FOREIGN KEY ("exit_reason_id") REFERENCES "public"."exit_reasons"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "inventory_batches" ADD CONSTRAINT "inventory_batches_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
@@ -646,4 +632,11 @@ CREATE TABLE "auth_rate_limits" (
 	"attempts" integer DEFAULT 0 NOT NULL,
 	"reset_at" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE "license_state" (
+"id" serial PRIMARY KEY NOT NULL,
+"device_id" text NOT NULL,
+"license" text,
+"activated_at" timestamp with time zone
 );

@@ -78,3 +78,7 @@ releases/v4.0.0/android/*WebBundle*.zip
 # runtime logs from the license generators
 issued-licenses-*.log
 releases/v4.0.0/windows/Damascus-Emergency-Inventory-v4.0.0-Windows-*/
+
+releases/v4.0.0/scripts/*.class
+
+releases/v4.0.0/windows/Damascus-Emergency-Inventory-4.0.0-RUN/

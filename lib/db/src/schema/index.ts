@@ -15,4 +15,5 @@ export * from "./audit-log";
 export * from "./alerts";
 export * from "./sync";
 export * from "./auth-rate-limit";
+export * from "./license-state";
 export * from "./backup";

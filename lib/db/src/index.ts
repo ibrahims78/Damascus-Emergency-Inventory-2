@@ -90,6 +90,20 @@ async function initializeDesktopDatabase(): Promise<void> {
     await desktopClient.exec(
       `ALTER TABLE sync_conflicts ADD COLUMN IF NOT EXISTS severity text NOT NULL DEFAULT 'medium';`,
     );
+    // Transactions sync columns + index + FKs: the packaged desktop-schema.sql
+    // historically placed these ALTERs before CREATE TABLE transactions, so
+    // fresh databases silently missed them (restore failure "column ... does
+    // not exist"). Repair idempotently on every boot for existing machines.
+    await desktopClient.exec(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS operation_id text;`);
+    await desktopClient.exec(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS origin_node_id text;`);
+    await desktopClient.exec(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS origin_sequence integer;`);
+    await desktopClient.exec(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS document_number_scope text;`);
+    await desktopClient.exec(`CREATE UNIQUE INDEX IF NOT EXISTS transactions_operation_id_unique ON "transactions" ("operation_id");`);
+    await desktopClient.exec(`DO $fix$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_item_id_items_id_fk') THEN ALTER TABLE transactions ADD CONSTRAINT transactions_item_id_items_id_fk FOREIGN KEY (item_id) REFERENCES items(id); END IF; END $fix$;`);
+    await desktopClient.exec(`DO $fix$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_equipment_id_equipment_id_fk') THEN ALTER TABLE transactions ADD CONSTRAINT transactions_equipment_id_equipment_id_fk FOREIGN KEY (equipment_id) REFERENCES equipment(id); END IF; END $fix$;`);
+    await desktopClient.exec(`DO $fix$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_recipient_id_recipients_id_fk') THEN ALTER TABLE transactions ADD CONSTRAINT transactions_recipient_id_recipients_id_fk FOREIGN KEY (recipient_id) REFERENCES recipients(id); END IF; END $fix$;`);
+    await desktopClient.exec(`DO $fix$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_exit_reason_id_exit_reasons_id_fk') THEN ALTER TABLE transactions ADD CONSTRAINT transactions_exit_reason_id_exit_reasons_id_fk FOREIGN KEY (exit_reason_id) REFERENCES exit_reasons(id); END IF; END $fix$;`);
+    await desktopClient.exec(`DO $fix$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_created_by_users_id_fk') THEN ALTER TABLE transactions ADD CONSTRAINT transactions_created_by_users_id_fk FOREIGN KEY (created_by) REFERENCES users(id); END IF; END $fix$;`);
     await desktopClient.exec(
       `CREATE TABLE IF NOT EXISTS sync_trusted_nodes ("node_id" text PRIMARY KEY NOT NULL, "node_type" text NOT NULL, "label" text, "status" text DEFAULT 'trusted' NOT NULL, "paired_at" timestamp with time zone DEFAULT now() NOT NULL, "revoked_at" timestamp with time zone, "last_seen_at" timestamp with time zone);`,
     );
@@ -115,6 +129,9 @@ async function initializeDesktopDatabase(): Promise<void> {
     );
     await desktopClient.exec(
       `CREATE TABLE IF NOT EXISTS auth_rate_limits ("key" text PRIMARY KEY NOT NULL, "attempts" integer DEFAULT 0 NOT NULL, "reset_at" timestamp with time zone NOT NULL, "updated_at" timestamp with time zone DEFAULT now() NOT NULL);`,
+    );
+    await desktopClient.exec(
+      `CREATE TABLE IF NOT EXISTS license_state ("id" serial PRIMARY KEY NOT NULL, "device_id" text NOT NULL, "license" text, "activated_at" timestamp with time zone);`,
     );
     if (backupSchemaReady) {
       return;

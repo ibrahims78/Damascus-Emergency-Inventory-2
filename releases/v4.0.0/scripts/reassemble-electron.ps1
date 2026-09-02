@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $root = 'D:\autoclaw projects\Damascus-Emergency-Inventory-autoclaw'
 $rel = Join-Path $root 'releases\v4.0.0'
@@ -36,6 +36,12 @@ function Rebuild-ElectronVariant {
   Copy-Item (Join-Path $ApiSrc '*') (Join-Path $stage 'app\api') -Recurse -Force
   New-Item -ItemType Directory -Path (Join-Path $stage 'app\schema') -Force | Out-Null
   Copy-Item (Join-Path $root 'lib\db\desktop-schema.sql') (Join-Path $stage 'app\schema\desktop-schema.sql') -Force
+  # 3b) packaged license public key (server-side verify inside the asar)
+  $keySrc = Join-Path $root 'releases\v4.0.0\license-public-keys\windows.b64'
+'releases\v4.0.0\license-public-keys\windows.b64'
+  if (Test-Path $keySrc) {
+    Copy-Item $keySrc (Join-Path $stage 'app\license-public-key.b64') -Force
+  }
 
   # 4) repack the asar
   $newAsar = Join-Path $work 'app.asar'

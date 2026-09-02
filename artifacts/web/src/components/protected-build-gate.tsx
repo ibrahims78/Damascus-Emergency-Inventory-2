@@ -6,10 +6,19 @@ import {
   type LicenseResult,
 } from "../../../../lib/license-core/src/index";
 
-const DEVICE_STORAGE_KEY = "damascus-ems.protected.device-id";
+const DEVICE_STORAGE_KEY = "damasc…e-id";
 const LICENSE_PLATFORM = ((import.meta.env.VITE_LICENSE_PLATFORM ?? "android") as "android" | "windows");
 const LICENSE_PUBLIC_KEY = (import.meta.env.VITE_LICENSE_PUBLIC_KEY ?? "") || undefined;
-const LICENSE_STORAGE_KEY = "damascus-ems.protected.license";
+const LICENSE_STORAGE_KEY = "damasc…ense";
+
+// Server-license flow: the PROTECTED desktop build binds the license to the
+// MACHINE (the API server persists deviceId + license), so every browser
+// window on the same machine is activated together. The offline (Android)
+// build keeps the per-device browser-localStorage flow.
+const SERVER_FLOW =
+  import.meta.env.VITE_PROTECTED_BUILD === "1" && import.meta.env.VITE_OFFLINE_MODE !== "1";
+
+type ServerStatus = { deviceId: string; activated: boolean; status: string };
 
 function statusMessage(result: LicenseResult): string {
   if (result.status === "unsupported") {
@@ -25,8 +34,20 @@ export function ProtectedBuildGate({ children }: { children: React.ReactNode }) 
   const [checking, setChecking] = useState(true);
   const [activating, setActivating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null);
 
   useEffect(() => {
+    if (SERVER_FLOW) {
+      fetch("/api/license/status")
+        .then((r) => r.json())
+        .then((s: ServerStatus) => {
+          setServerStatus(s);
+          setDeviceId(s.deviceId ?? "");
+        })
+        .catch(() => setServerStatus({ deviceId: "(server unreachable)", activated: false, status: "missing" }))
+        .finally(() => setChecking(false));
+      return;
+    }
     const id = getInstallDeviceId(window.localStorage, DEVICE_STORAGE_KEY);
     const saved = window.localStorage.getItem(LICENSE_STORAGE_KEY) ?? "";
     setDeviceId(id);
@@ -44,10 +65,32 @@ export function ProtectedBuildGate({ children }: { children: React.ReactNode }) 
     );
   }
 
-  if (result?.status === "valid") return children;
+  const activated = SERVER_FLOW ? (serverStatus?.activated ?? false) : result?.status === "valid";
+  if (activated) return children;
 
   async function activate() {
     setActivating(true);
+    if (SERVER_FLOW) {
+      try {
+        const res = await fetch("/api/license/activate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ license: license.trim() }),
+        });
+        const data = (await res.json()) as { status?: string; ok?: boolean };
+        if (data.ok) {
+          const s = await fetch("/api/license/status").then((r) => r.json());
+          setServerStatus(s);
+          setResult({ status: "valid" });
+        } else {
+          setResult({ status: (data.status ?? "invalid") as LicenseResult["status"] });
+        }
+      } catch {
+        setResult({ status: "unsupported" });
+      }
+      setActivating(false);
+      return;
+    }
     const next = license.trim();
     const checked = await verifyLicense(next, {
       platform: LICENSE_PLATFORM,
@@ -119,12 +162,11 @@ export function ProtectedBuildGate({ children }: { children: React.ReactNode }) 
         <button
           type="button"
           onClick={activate}
-          disabled={activating || !license.trim()}
-          className="mt-4 w-full rounded-lg bg-sky-600 px-4 py-3 font-bold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={activating}
+          className="mt-4 w-full rounded-lg bg-sky-500 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:opacity-50"
         >
           {activating ? "جارٍ التحقق..." : "تفعيل التطبيق"}
         </button>
-        <p className="mt-4 text-center text-xs text-slate-500">لا يتم إرسال معرّف الجهاز أو الترخيص إلى خادم خارجي.</p>
       </section>
     </main>
   );
