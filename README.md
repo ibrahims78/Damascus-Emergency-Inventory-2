@@ -1,236 +1,181 @@
-# نظام مستودع الإسعاف والطوارئ — دمشق
-### Damascus EMS Warehouse Management System
+<div align="center">
 
-<div dir="rtl">
+# منظومة الاحالة و الاسعاف و الطوارئ - دمشق | نظام المستودع
 
-نظام إدارة مستودع داخلي لمنظومة الاحالة و الاسعاف و الطوارئ - دمشق، يُتيح تتبع المواد الطبية والتجهيزات، وإصدار سندات الإدخال والإخراج، ولوحة تحكم مع مؤشرات أداء حقيقية، وتقارير متقدمة — بواجهة عربية RTL كاملة.
+### Damascus EMS Warehouse Management System — v4.0.0
+
+[![Release](https://img.shields.io/github/v/release/ibrahims78/Damascus-Emergency-Inventory-autoclaw?label=%D8%A7%D9%84%D8%A5%D8%B5%D8%AF%D8%A7%D8%B1&logo=github)](https://github.com/ibrahims78/Damascus-Emergency-Inventory-autoclaw/releases/latest)
+[![CI](https://github.com/ibrahims78/Damascus-Emergency-Inventory-autoclaw/actions/workflows/ci.yml/badge.svg)](https://github.com/ibrahims78/Damascus-Emergency-Inventory-autoclaw/actions/workflows/ci.yml)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)](#-التنزيلات)
+[![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
+
+نظام إدارة مستودع داخلي لمنظومة الاحالة و الاسعاف و الطوارئ - دمشق — تتبع المواد الطبية والتجهيزات، سندات إدخال وإخراج A4 جاهزة للطباعة، لوحة تحكم بمؤشرات حقيقية، تقارير متقدمة، نسخ احتياطي مشفّر، مزامنة بين الأجهزة، وترخيص رقمي — **بواجهة عربية RTL كاملة ويعمل دون إنترنت**.
 
 </div>
 
 ---
 
-## ✨ Features
+## 📥 التنزيلات
+
+كل الإصدارات الجاهزة من صفحة [**Releases → Packages v4.0.0**](https://github.com/ibrahims78/Damascus-Emergency-Inventory-autoclaw/releases/tag/v4.0.0):
+
+| الحزمة | المنصة | الوصف |
+|---|---|---|
+| `Windows-Protected.zip` | ويندوز 10/11 (64-bit) | النسخة الكاملة **مع تفعيل رقمي Ed25519** مربوط بالجهاز عبر الخادم |
+| `Windows-Offline.zip` | ويندوز 10/11 (64-bit) | نفس النظام بدون بوابة تفعيل (للاستخدام المحلي المباشر) |
+| `Android-Protected.apk` | أندرويد 7+ | النسخة المحمية للهاتف (تفعيل محلي بمعرّف الهاتف) |
+| `Android-Offline.apk` | أندرويد 7+ | النسخة دون تفعيل |
+| `KeyGenerator-v4.0.0-P-{Windows,Android}.cmd/.py` | — | مولّدات التراخيص (تُحفظ الترخيص في ملف نصي) |
+| `SHA256SUMS-*.txt` | — | بصمات التحقق من سلامة الحزم |
+
+> الحزم لا تحتاج تثبيتاً: فك الضغط وشغّل `Damascus Emergency Inventory.exe`. لا تحتاج PostgreSQL ولا Node.js ولا اتصال إنترنت.
+
+---
+
+## ✨ المزايا
 
 | الميزة | الوصف |
 |---|---|
-| 📦 **إدارة المواد** | CRUD كامل للمواد الطبية والمستهلكات مع بحث وفلترة |
-| 🔧 **إدارة التجهيزات** | تتبع الأجهزة والمعدات مع سجل كامل |
-| 📋 **العمليات (الحركات)** | تسجيل إدخال/إخراج + سند A4 قابل للطباعة بالعربية |
-| 📊 **لوحة التحكم** | إحصائيات فورية ومخططات حركة المواد |
-| 📈 **التقارير** | 7 تبويبات: جرد، حركة، انتهاء صلاحية، أقل من الحد، تجهيزات، الوضع التفصيلي، والعهد المفتوحة |
-| 👥 **إدارة المستخدمين** | أدوار ثلاثة (مدير / مسؤول مستودع / مشاهد) |
-| 🔔 **التنبيهات** | جرس تنبيه في الـ Header يتجدد تلقائياً |
-| ⚙️ **الإعدادات** | ملف شخصي، تغيير كلمة المرور، إعدادات المنظومة |
-| 🖨️ **الطباعة** | سندات إدخال/إخراج بتنسيق A4 RTL جاهزة للطباعة |
-| 📤 **التصدير** | تصدير التقارير بصيغة Excel (.xlsx) |
-| 💾 **النسخ الاحتياطي والاستعادة** | حزم نسخ مشفرة، معاينة، تحقق، استعادة، ونقاط تراجع |
-| 🔄 **المزامنة** | مزامنة موقعة بين العقد مع منع التكرار ومعالجة التعارضات |
-| 🧾 **التدقيق** | سجل تدقيق للعمليات الإدارية وحركات المخزون والاستعادة |
-| 📱 **Android Offline** | تطبيق Capacitor يعمل محلياً دون API أو PostgreSQL مع تصدير النسخة |
+| 📦 **إدارة المواد** | CRUD كامل للمواد والمستهلكات مع بحث وفلترة وأرقام تشغيل دائمة |
+| 🔧 **إدارة التجهيزات** | تتبّع الأجهزة مع سجل حياة كامل وصيانة وعهد |
+| 📋 **العمليات** | إدخال/إخراج مع تخصيص دفعات FEFO وسند A4 قابل للطباعة |
+| 📊 **لوحة التحكم** | مؤشرات فورية ومخططات حركة |
+| 📈 **التقارير** | جرد، حركة، انتهاء صلاحية، أقل من الحد، تجهيزات، عهد مفتوحة — وتصدير Excel |
+| 💾 **نسخ احتياطي واستعادة** | حزم مشفرة بكلمة مرور، فحص ومعاينة، استعادة، نقاط تراجع |
+| 🔄 **مزامنة العقد** | تبادل مباشر عبر الشبكة أو ملفات `.dme-sync` مشفرة + Relay + طابور تعارضات |
+| 🔐 **ترخيص رقمي** | Ed25519 — ترخيص مربوط بالجهاز، ثابت عبر كل المتصفحات والنوافذ |
+| 🧾 **تدقيق** | سجل تدقيق للعمليات الإدارية والمخزنية والاستعادة |
+| 🌐 **شبكة محلية** | وصول كامل من متصفحات الأجهزة الأخرى عبر LAN بمنافذ ثابتة |
+| 👥 **أدوار** | مدير / مسؤول مستودع / مشاهد + حد لمحاولات الدخول |
+| 📱 **أندرويد** | عمل محلي كامل على الهاتف (IndexedDB) مع تصدير الحزم |
 
 ---
 
-## 🏗️ Tech Stack
+## 🚀 البدء السريع (ويندوز)
 
-```
-Frontend          Backend           Database          Shared
-─────────         ─────────         ─────────         ──────
-React 19          Express 5         PostgreSQL        Zod v4
-Vite 7            Node.js 20+       Drizzle ORM       TypeScript 5.9
-TailwindCSS       Pino (logging)    Drizzle Kit       OpenAPI 3.0
-Radix UI          Session auth                        Orval (codegen)
-TanStack Query    Zod validation
-Recharts
+1. نزّل `Windows-Protected.zip` من صفحة الإصدارات
+2. فك الضغط وشغّل **`Damascus Emergency Inventory.exe`**
+3. عند أول تشغيل: أنشئ حساب المدير (شاشة «إعداد حساب المدير»)
+4. ستظهر شاشة **«نسخة محمية»** بمعرّف الجهاز — انسخه
+5. شغّل `KeyGenerator-v4.0.0-P-Windows.cmd` والصق المعرّف → انسخ محتوى ملف `license-*.txt`
+6. الصقه في التطبيق → **«تفعيل التطبيق»** — انتهى
+
+> التفعيل يُخزَّن في قاعدة بيانات الجهاز (ليس في المتصفح): بعد التفعيل يفتح النظام مفعّلاً من كل متصفحات الشبكة المحلية.
+
+### أندرويد
+
+ثبّت `Android-Protected.apk` (اسمح بـ «مصادر غير معروفة») → نفس خطوات التفعيل بمولّد الأندرويد — التفعيل هناك محلي بمعرّف الهاتف.
+
+### الوصول من المتصفح (LAN)
+
+| الخدمة | المنفذ | مثال |
+|---|---|---|
+| الواجهة | **41790** (ثابت) | `http://192.168.1.55:41790` |
+| API | **41789** (ثابت) | `http://192.168.1.55:41789/api/healthz` |
+
+اسمح للمنفذين في جدار الحماية مرة واحدة:
+
+```bat
+netsh advfirewall firewall add rule name="DME Web 41790" dir=in action=allow protocol=TCP localport=41790
+netsh advfirewall firewall add rule name="DME API 41789" dir=in action=allow protocol=TCP localport=41789
 ```
 
-**Architecture:** pnpm monorepo · OpenAPI-first · RTL-first
+اعرف عنوان الجهاز بـ `ipconfig` (سطر IPv4). المنفذان ثابتان على كل الأجهزة؛ يتحولان لعشوائي فقط عند تشغيل نسختين معاً على نفس الجهاز.
 
 ---
 
-## 📁 Project Structure
+## 🔄 المزامنة بين الأجهزة
+
+| السيناريو | الطريقة |
+|---|---|
+| ويندوز ↔ ويندوز | «المزامنة» → «مزامنة شبكية مباشرة» بعنوان API الطرف الآخر `:41789` + بيانات مشرفه — النداء ثنائي الاتجاه. أو ملفات `.dme-sync` |
+| أندرويد ↔ أندرويد | تصدير حزمة → مشاركة الملف → استيراد وتطبيق (ثم العكس) |
+| أندرويد ↔ ويندوز | الهاتف يبدأ «مزامنة شبكية مباشرة» بعنوان الويندوز `:41789` — أو ملفات |
+
+الاستيراد مضمون ضد التكرار (كل تغيير بمعرّف فريد)، والتعارضات تظهر في «طابور التعارضات» لقرارك (اعتماد/رفض/تأجيل) مع تسجيل في التدقيق. التفاصيل الكاملة في [دليل العمليات](docs/operations.md) و[دليل المستخدم](docs/user-guide-ar.md).
+
+---
+
+## 🔐 الأمان
+
+- **ترخيص Ed25519** بمفاتيح منفصلة لكل منصة — المفتاح الخاص خارج المستودع (`release-secrets/`، غير مرفوع)
+- **حزم النسخ والمزامنة مشفرة** بكلمة مرور لا يعرفها سوى المرسل والمستقبل
+- **كلمة مرور المدير**: تُنشأ عند أول تشغيل (لا كلمات مرور افتراضية)، إجبار التغيير، حد لمحاولات الدخول
+- **CSRF + CORS محصّنان** لنطاقات الشبكة المحلية، جلسات موقعة، تسجيل تدقيق شامل
+- **seed مضمون**: لا بيانات وهمية تدخل الإنتاج؛ البيانات الفعلية تُستورد من Excel
+
+---
+
+## 🏗️ البنية التقنية
+
+```
+Frontend            Backend               Database          المشترك
+──────────          ─────────             ─────────         ────────
+React 19            Express 5             PGlite مدمجة      Zod v4
+Vite 7              Node.js 20+           Drizzle ORM       TypeScript 5.9
+TailwindCSS         Pino                  (بدون خادم)       OpenAPI 3.0
+TanStack Query      Session + CSRF                          Orval
+Radix UI            Electron 39 (سطح المكتب)
+Recharts            Capacitor (أندرويد)
+```
+
+**pnpm monorepo** · OpenAPI-first (الأكواد المولدة لا تُعدل يدوياً) · RTL-first
+
+### بنية المشروع
 
 ```
 ├── artifacts/
-│   ├── api-server/          # Express API server (port 8080)
-│   │   └── src/
-│   │       ├── routes/      # Route handlers (one file per domain)
-│   │       └── middlewares/ # Auth, audit logging
-│   ├── web/                 # React + Vite frontend (port 22333)
-│   │   └── src/
-│   │       ├── pages/       # All application pages
-│   │       └── components/  # UI components & layout
+│   ├── api-server/         # خادم API (يتضمن build:standard و build:protected)
+│   └── web/                # واجهة React (dist/protected-windows و dist/protected-android)
 ├── lib/
-│   ├── db/                  # Drizzle schema (source of truth for DB)
-│   ├── api-spec/            # OpenAPI spec (source of truth for API)
-│   ├── api-client-react/    # Generated React Query hooks (do not edit)
-│   ├── api-zod/             # Generated Zod schemas (do not edit)
-│   ├── backup-format/        # Encrypted backup and sync package format
-│   └── sync-contract/        # Shared synchronization contracts
-├── android/                  # Capacitor Android project
-├── docs/                     # Operations, user guide, and domain rules
-├── releases/                 # Published Android/Desktop release artifacts
-└── scripts/
-    ├── import-excel.mjs     # Excel import utility
-    └── phase*-*.{mjs,ts}     # Development and acceptance smoke checks
+│   ├── db/                 # مخطط Drizzle + desktop-schema.sql + الترميم الذاتي
+│   ├── license-core/       # التحقق Ed25519 (WebCrypto + مسار noble الاحتياطي)
+│   ├── backup-format/      # صيغة حزم النسخ والمزامنة المشفرة
+│   └── api-spec/           # مواصفة OpenAPI (مصدر الحقيقة)
+├── android/                # مشروع أندرويد
+├── releases/v4.0.0/        # سكربتات التجميع والتوقيع والمولّدات
+├── docs/                   # أدلة التشغيل والمستخدم وقواعد المجال
+└── scripts/                # أدوات الاستيراد وإصدار التراخيص + CI
 ```
 
 ---
 
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js 20+
-- pnpm 9+
-- PostgreSQL database
-
-### Setup
+## 🛠️ التطوير من المصدر
 
 ```bash
-# 1. Install dependencies
-pnpm install
+pnpm install --ignore-scripts   # (Windows: تجاوز سكربت preinstall)
+pnpm run typecheck              # كل الحزم
+pnpm run build                  # بناء كامل
 
-# 2. Set environment variables
-#    DATABASE_URL=postgresql://...
-#    SESSION_SECRET=<random-secret>
+# تطوير يومي (أدلة ضمن المستودع)
+./start-dev.ps1                 # API + واجهة التطوير
+./stop-dev.ps1
 
-# 3. Push database schema
-pnpm --filter @workspace/db run push
-
-# 4. Start services manually
-PORT=8080 pnpm --filter @workspace/api-server run dev
-PORT=22333 BASE_PATH=/ pnpm --filter @workspace/web run dev
+# بناء حزم الإصدار
+node scripts/build-protected-web.mjs windows          # واجهة النسخة المحمية
+pnpm --filter @workspace/api-server run build:protected
+./releases/v4.0.0/scripts/reassemble-electron.ps1     # حزمتا ويندوز
+./releases/v4.0.0/android/build-android-apk.ps1       # حزمتا أندرويد (يتطلب Android Studio)
 ```
 
-في Replit، يتم تشغيل الخدمتين تلقائياً عبر workflow باسمَي:
-
-- `artifacts/api-server: API Server` على المنفذ `8080`
-- `artifacts/web: web` على المنفذ `22333`
-
-`DATABASE_URL` متغير مُدار تلقائياً من Replit، بينما يجب توفير `SESSION_SECRET`
-كسرّ. لا تتضمن النسخة الحالية ملفات بيانات تجريبية أو مرفقات مستخدم؛ لاستيراد
-بيانات فعلية استخدم ملف Excel خارجي مع أداة الاستيراد الموضحة أدناه.
-
-### Default Credentials
-
-```
-Username: admin
-Password: Admin@1234
-```
-
-> ⚠️ Change the password immediately after first login.
+اختبارات CI تعمل تلقائياً عبر `.github/workflows/ci.yml` (مزامنة + أمان + قواعد بيانات على مثيلين حيين).
 
 ---
 
-## 🔄 Development Workflow
+## 🔧 استكشاف الأخطاء
 
-```bash
-# Full typecheck
-pnpm run typecheck
-
-# Build all packages
-pnpm run build
-
-# After editing lib/api-spec/openapi.yaml — regenerate hooks
-pnpm --filter @workspace/api-spec run codegen
-tsc --build
-
-# Push DB schema changes (dev only)
-pnpm --filter @workspace/db run push
-
-# Run the API acceptance smoke test while the API workflow is running
-pnpm --filter @workspace/scripts run phase8:acceptance
-
-# Build the offline Android release
-pnpm run build:android:offline
-```
-
-> **Important:** Always run `tsc --build` before `pnpm run typecheck` — the web package depends on compiled TypeScript libraries.
+| المشكلة | الحل |
+|---|---|
+| لا يفتح من متصفح جهاز آخر | جدار الحماية (القاعدتان أعلاه) + `ipconfig` للعنوان الصحيح |
+| `Cannot GET /` على المنفذ 41789 | طبيعي — 41789 هو API فقط؛ الواجهة على **41790** |
+| «الترخيص غير مقبول» | تأكد أن مولّد التفعيل بنفس المنصة وأن المعرّف منسوخ كاملاً |
+| فشلت الاستعادة | حدّث النسخة إلى v4.0.0 (إصلاح مخطط الاستعادة) وشغّل مرة واحدة قبل الاستعادة |
+| المنفذ 41789/41790 مشغول | أغلق النسخ المكررة من التطبيق — يعود للمنفذ الثابت |
 
 ---
 
-## 🌐 API
+## 📄 الترخيص
 
-The API follows an OpenAPI 3.0 spec located at `lib/api-spec/openapi.yaml`. All client hooks and Zod schemas are auto-generated from this spec via Orval — never edit the generated files in `lib/api-client-react/src/generated/` or `lib/api-zod/src/generated/` directly.
+مشروع داخلي — منظومة الاحالة و الاسعاف و الطوارئ - دمشق. جميع الحقوق محفوظة (انظر [LICENSE](LICENSE)).
 
-Key endpoints:
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/auth/login` | Login |
-| `GET` | `/api/items` | List items |
-| `GET` | `/api/transactions` | List transactions |
-| `POST` | `/api/transactions` | Record IN/OUT transaction |
-| `GET` | `/api/healthz` | Health check |
-| `GET` | `/api/reports/stock` | Stock report |
-| `GET` | `/api/reports/stock-position` | Reconciled stock position |
-| `GET` | `/api/reports/custodies` | Open and overdue custody report |
-| `GET` | `/api/alerts` | Active alerts |
-| `GET` | `/api/settings` | System settings |
-| `GET/POST` | `/api/backups` | Backup catalog and package operations |
-| `POST` | `/api/backups/inspect` | Inspect an encrypted backup package |
-| `POST` | `/api/backups/dry-run` | Preview a restore without applying it |
-| `POST` | `/api/backups/restore` | Restore a verified backup package |
-| `POST` | `/api/backups/:restorePointId/rollback` | Roll back a restore point |
-| `GET/POST` | `/api/sync` | Signed sync packages and sync state |
-| `GET` | `/api/audit` | Administrative audit log |
-
----
-
-## 🔒 Roles & Permissions
-
-| Role | Arabic | Permissions |
-|---|---|---|
-| `admin` | مدير | Full access including user management |
-| `warehouse_manager` | مسؤول مستودع | Items, equipment, transactions, reports |
-| `viewer` | مشاهد | Read-only access |
-
----
-
-## 📦 Initial Data and Import
-
-To seed initial categories, recipients, exit reasons, and an admin user:
-
-```bash
-node artifacts/api-server/seed.mjs
-```
-
-To import items from an Excel file (عهدة المستودع format):
-
-```bash
-# Run from the repository root.
-node scripts/import-excel.mjs <path-to-file.xlsx>
-```
-
-لا يتم إنشاء بيانات وهمية تلقائياً عند تشغيل التطبيق. يجب تغيير كلمة مرور
-المستخدم الإداري بعد أول تسجيل دخول، وعدم حفظ ملفات البيانات أو كلمات المرور
-داخل المستودع.
-
-## 📱 Android Offline
-
-The Android application is a Capacitor wrapper around the web frontend. Build it
-with:
-
-```bash
-pnpm run build:android:offline
-```
-
-The offline build uses a local IndexedDB-backed API. It does not require the
-Replit API, PostgreSQL, or an external server; data remains on the device and
-can be exported from the backup screen.
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Update `lib/api-spec/openapi.yaml` first for any API changes, then run codegen
-4. Commit with a descriptive message
-5. Open a pull request
-
----
-
-## 📄 License
-
-Internal use — منظومة الاحالة و الاسعاف و الطوارئ - دمشق.
+**المطوّر**: [ibrahims78](https://github.com/ibrahims78)
