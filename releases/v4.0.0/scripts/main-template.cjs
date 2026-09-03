@@ -306,7 +306,7 @@ app.whenReady().then(async () => {
     await dialog.showMessageBox({
       type: "error",
       title: "Damascus Emergency Inventory",
-      message: "╪¬╪╣╪░╪▒ ╪¬╪┤╪║┘è┘ä ╪¬╪╖╪¿┘è┘é ╪│╪╖╪¡ ╪º┘ä┘à┘â╪¬╪¿.",
+message: "تعذر تشغيل تطبيق سطح المكتب.",
       detail: error instanceof Error ? error.message : String(error),
     });
     app.quit();
