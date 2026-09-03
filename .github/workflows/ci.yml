@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10.26.1
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -45,4 +45,4 @@ jobs:
       - name: Run E2E suites
         env:
           SEED_ADMIN_PASSWORD: 'Admin@1234'
-        run: ./scripts/ci-e2e.sh
+        run: bash ./scripts/ci-e2e.sh

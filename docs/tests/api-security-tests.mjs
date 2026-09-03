@@ -10,7 +10,7 @@ import { join } from 'node:path';
 const A = 'http://127.0.0.1:8080';
 const B = 'http://127.0.0.1:8081';
 const ADMIN = 'admin';
-const ADMIN_PW = '***';
+const ADMIN_PW = process.env.SEED_ADMIN_PASSWORD ?? '***';
 
 let passed = 0;
 let failed = 0;
@@ -296,3 +296,12 @@ await t('fresh seed: random password + mustChangePassword flow', async () => {
     ? true
     : { oldDefault: oldDefault.status, login: login.status, mustChange: login.body?.mustChangePassword, change: change.status, relogin: relogin.status, mustAfter: relogin.body?.mustChangePassword, oldAfter: reloginOld.status };
 });
+
+console.log(`\n═══ SECURITY RESULTS: ${passed} passed, ${failed} failed ═══`);
+if (failures.length) {
+  console.log("Failures:");
+  for (const failure of failures) {
+    console.log(`  • ${failure.name} => ${JSON.stringify(failure.detail)}`);
+  }
+  process.exit(1);
+}
