@@ -14,7 +14,7 @@ CREATE TABLE "system_settings" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"setup_completed" boolean DEFAULT false NOT NULL,
 	"setup_at" timestamp with time zone,
-	"org_name" text DEFAULT 'Ù…Ù†Ø¸ÙˆÙ…Ø© Ø§Ù„Ø§Ø­Ø§Ù„Ø© Ùˆ Ø§Ù„Ø§Ø³Ø¹Ø§Ù Ùˆ Ø§Ù„Ø·ÙˆØ§Ø±Ø¦ - Ø¯Ù…Ø´Ù‚' NOT NULL,
+	"org_name" text DEFAULT 'منظومة الاحالة و الاسعاف و الطوارئ - دمشق' NOT NULL,
 	"org_subtitle" text,
 	"expiry_alert_days" integer DEFAULT 30 NOT NULL,
 	"units_list" text,

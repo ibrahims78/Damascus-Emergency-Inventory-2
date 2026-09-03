@@ -274,6 +274,7 @@ async function createWindow() {
 
   await startEmbeddedApi();
   const port = await startLocalServer();
+  const desktopPreload = path.join(__dirname, "preload.cjs");
   desktopWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -281,10 +282,10 @@ async function createWindow() {
     minHeight: 680,
     backgroundColor: "#f8fafc",
     autoHideMenuBar: true,
-    webPreferences: {
+        webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: path.join(__dirname, "preload.cjs"),
+      ...(fs.existsSync(desktopPreload) ? { preload: desktopPreload } : {}),
     },
   });
 

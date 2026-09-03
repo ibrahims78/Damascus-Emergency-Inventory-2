@@ -53,7 +53,7 @@ function ProtectedRoute({
   adminOnly?: boolean;
 }) {
   const [location, setLocation] = useLocation();
-  const { data: user, isLoading, isError } = useGetCurrentUser();
+  const { data: user, isLoading, isError, error } = useGetCurrentUser();
 
   // Keep the CSRF token available to the fetch wrapper (issued at login and
   // refreshed on every /me round trip).
@@ -80,7 +80,32 @@ function ProtectedRoute({
     );
   }
 
-  if (isError || !user) return null;
+  if (isError) {
+    // 401/403 = غير مسجل: تأثير إعادة التوجيه نحو تسجيل الدخول يتكفل بالأمر.
+    // أي فشل آخر (الخادم الداخلي متوقف مثلاً) يظهر برسالة واضحة بدل شاشة صامتة.
+    const status = (error as unknown as { response?: { status?: number } } | null | undefined)?.response?.status;
+    if (status === 401 || status === 403) return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6" dir="rtl">
+        <div className="max-w-md w-full bg-card border rounded-xl shadow-xl p-6 text-center space-y-4">
+          <div className="text-4xl" aria-hidden="true">🔌</div>
+          <h1 className="text-xl font-bold">تعذر الاتصال بالخادم الداخلي</h1>
+          <p className="text-sm text-muted-foreground">
+            لم يتمكن التطبيق من الوصول إلى قاعدة البيانات المحلية. أعد المحاولة، وإذا تكررت المشكلة أغلق التطبيق وافتحه من جديد.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            إعادة المحاولة
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) return null;
 
   if (adminOnly && user.role !== 'admin') {
     return (
