@@ -40,9 +40,16 @@ export function installCsrfClient() {
       method !== 'OPTIONS' &&
       token
     ) {
+      // `customFetch` normalizes request headers to a native Headers object.
+      // Spreading Headers (`{ ...init.headers }`) drops its entries because
+      // they are not enumerable, which would remove Content-Type and make
+      // Express leave req.body undefined for JSON mutations.
+      const headers = new Headers(input instanceof Request ? input.headers : undefined);
+      new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+      headers.set('X-CSRF-Token', token);
       init = {
         ...init,
-        headers: { ...(init?.headers ?? {}), 'X-CSRF-Token': token },
+        headers,
       };
     }
     return originalFetch(input, init);
