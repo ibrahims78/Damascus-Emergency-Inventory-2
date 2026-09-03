@@ -68,6 +68,7 @@ attached_assets/
 
 # local PGlite data directory (created at runtime)
 .damascus-data/
+.damascus-artifact-api-data/
 
 
 # v4.0.0 release binaries stay local (checksums + notes are tracked)

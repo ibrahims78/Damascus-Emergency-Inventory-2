@@ -5,9 +5,8 @@
 - Node.js 20 أو أحدث و`pnpm 9+`.
 - PostgreSQL مع `DATABASE_URL`.
 - `SESSION_SECRET` محفوظ في Secrets، ولا يوضع في ملفات المشروع.
-- تشغيل خدمتي API والواجهة من خلال workflows ريبليت:
-  - `artifacts/api-server: API Server`
-  - `artifacts/web: web`
+- تشغيل التطبيق من خلال Workflow الرئيسي `Start application`؛ هذا الـWorkflow
+  يشغّل API على 8080 والواجهة على 5000 معًا في بيئة سطح المكتب المحلية.
 
 ## تشغيل بيئة التطوير
 
@@ -31,7 +30,7 @@ pnpm --filter @workspace/web run dev
 ## النشر
 
 1. شغّل `pnpm run typecheck` و`pnpm run build`.
-2. شغّل `pnpm --filter @workspace/scripts run phase8:acceptance` بينما API يعمل.
+2. شغّل `pnpm --filter @workspace/scripts run final:acceptance`.
 3. راجع إعدادات `DATABASE_URL` و`SESSION_SECRET` في بيئة النشر.
 4. نفّذ نشر ريبليت من نقطة تحقق ناجحة.
 5. بعد النشر تحقّق من `GET /api/healthz` ومن تسجيل الدخول والتقارير.
@@ -88,16 +87,12 @@ pnpm --filter @workspace/web run dev
 - تسجل العمليات الجديدة `backup_package_export` و`backup_package_restore` و
   `backup_restore_rollback` مع بصمة الحزمة والنتيجة دون حفظ كلمة المرور.
 
-## اختبار المرحلة 4–5
+## اختبارات الصيانة
 
-```bash
-pnpm --filter @workspace/scripts run phase45:backup-recovery
-pnpm --filter @workspace/scripts run phase45:db-smoke
-```
-
-تختبر الأوامر دورة الحزمة، التحقق من العبث وكلمة المرور الخاطئة والحزمة الناقصة
-والحقول الحساسة، ثم الدمج idempotently ورفض الرصيد السالب والتنظيف التلقائي لبيانات
-الاختبار.
+الاختبارات المتوفرة في النسخة الحالية هي `pnpm test` و`pnpm run typecheck`
+و`pnpm lint`. أما اختبارات المراحل القديمة التي كانت تعتمد على ملفات تشغيلية
+خارج المستودع فلم تعد أوامر مدعومة، حتى لا تشير وثائق التشغيل إلى ملفات غير
+موجودة.
 
 ## تشغيل المرحلة 6 — النسخ الكامل والتفاضلي
 
