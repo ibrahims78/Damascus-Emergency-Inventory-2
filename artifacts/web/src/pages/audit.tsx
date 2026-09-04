@@ -17,10 +17,24 @@ import {
   CircleX,
   Archive,
   Settings2,
+  Eye,
+  UserRound,
+  Clock3,
+  Globe2,
+  FileText,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -78,6 +92,24 @@ const actionLabels: Record<string, { label: string; color: string }> = {
   movement_failed:  { label: 'فشل حركة',      color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
   backup_export:    { label: 'تصدير نسخة',    color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
   backup_restore:   { label: 'استعادة نسخة',  color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
+  backup_catalog_create: { label: 'إنشاء سجل نسخة', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
+  backup_package_export: { label: 'تصدير حزمة نسخة', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
+  backup_package_restore: { label: 'استعادة حزمة نسخة', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
+  backup_restore_rollback: { label: 'التراجع عن الاستعادة', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' },
+  license_activated: { label: 'تفعيل الترخيص', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  sync_session_create: { label: 'إنشاء جلسة مزامنة', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_session_handshake: { label: 'مصافحة جلسة مزامنة', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_package_apply: { label: 'تطبيق حزمة مزامنة', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_package_ack: { label: 'تأكيد حزمة مزامنة', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  sync_pairing_consume: { label: 'استخدام رمز اقتران', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_trusted_node_revoke: { label: 'إلغاء عقدة موثوقة', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
+  sync_conflict_resolve: { label: 'حل تعارض مزامنة', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  sync_relay_upload: { label: 'رفع حزمة للمزامنة', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_exchange: { label: 'تبادل بيانات', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_exchange_rejected_signature: { label: 'رفض توقيع المزامنة', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
+  sync_package_export: { label: 'تصدير حزمة مزامنة', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
+  sync_package_import: { label: 'استيراد حزمة مزامنة', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
+  sync_package_import_merge: { label: 'دمج حزمة مزامنة', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
 };
 
 const entityLabels: Record<string, string> = {
@@ -90,6 +122,18 @@ const entityLabels: Record<string, string> = {
   recipient:   'جهة مستلمة',
   exit_reason: 'سبب إخراج',
   backup:      'نسخة احتياطية',
+  sync_session: 'جلسة مزامنة',
+  sync_package: 'حزمة مزامنة',
+  sync_trusted_node: 'عقدة موثوقة',
+  sync_relay_package: 'حزمة ترحيل',
+  sync_conflict: 'تعارض مزامنة',
+  inventory_batch: 'دفعة مخزنية',
+  batch_allocation: 'تخصيص دفعة',
+  personal_custody: 'عهدة شخصية',
+  custody_return: 'إعادة عهدة',
+  damage_record: 'سجل تلف',
+  central_return: 'إعادة مركزية',
+  license: 'ترخيص',
 };
 
 const actionIcons: Record<string, React.ReactNode> = {
@@ -104,7 +148,73 @@ const actionIcons: Record<string, React.ReactNode> = {
   movement_failed: <CircleX className="w-3.5 h-3.5" />,
   backup_export: <Archive className="w-3.5 h-3.5" />,
   backup_restore: <Archive className="w-3.5 h-3.5" />,
+  deactivate: <Settings2 className="w-3.5 h-3.5" />,
+  activate: <CheckCircle2 className="w-3.5 h-3.5" />,
 };
+
+const DEFAULT_ACTION_META = {
+  label: 'نشاط نظامي',
+  color: 'bg-muted text-muted-foreground',
+};
+
+const DETAIL_LABELS: Record<string, string> = {
+  username: 'اسم المستخدم',
+  fullName: 'الاسم الكامل',
+  name: 'الاسم',
+  itemName: 'اسم المادة',
+  equipmentName: 'اسم التجهيز',
+  role: 'الصلاحية',
+  isActive: 'الحالة',
+  action: 'الإجراء الداخلي',
+  nodeId: 'معرّف العقدة',
+  bytes: 'الحجم',
+  message: 'الرسالة',
+  reason: 'السبب',
+  quantity: 'الكمية',
+  unit: 'الوحدة',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'مدير النظام',
+  manager: 'مدير',
+  user: 'مستخدم',
+};
+
+const INTERNAL_ACTION_LABELS: Record<string, string> = {
+  password_changed: 'تغيير كلمة المرور',
+};
+
+function formatAuditValue(value: unknown, key?: string): string {
+  if (key === 'role' && typeof value === 'string') return ROLE_LABELS[value] ?? value;
+  if (key === 'action' && typeof value === 'string') return INTERNAL_ACTION_LABELS[value] ?? value;
+  if (key === 'isActive' && typeof value === 'boolean') return value ? 'مفعّل' : 'غير مفعّل';
+  if (typeof value === 'boolean') return value ? 'نعم' : 'لا';
+  if (typeof value === 'number') return value.toLocaleString('ar-SY');
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value) ?? '—';
+}
+
+function getEntrySummary(entry: AuditEntry): string {
+  const details = entry.details ?? {};
+  const preferredKeys = ['name', 'itemName', 'equipmentName', 'fullName', 'username', 'message'];
+  const detail = preferredKeys
+    .map((key) => [key, details[key]] as const)
+    .find(([, value]) => value != null && value !== '');
+
+  if (detail) {
+    return `${DETAIL_LABELS[detail[0]] ?? 'التفاصيل'}: ${formatAuditValue(detail[1], detail[0])}`;
+  }
+  return entry.entityId ? `السجل رقم ${entry.entityId.toLocaleString('ar-SY')}` : 'بدون تفاصيل إضافية';
+}
+
+function formatExactDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'وقت غير معروف';
+  return new Intl.DateTimeFormat('ar-SY', {
+    dateStyle: 'full',
+    timeStyle: 'medium',
+  }).format(date);
+}
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
@@ -123,6 +233,7 @@ export function AuditPage() {
   const [entityType, setEntityType] = useState('all');
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<AuditEntry | null>(null);
 
   const { data, isLoading, isError } = useQuery<AuditResponse>({
     queryKey: ['audit', { from, to, action, entityType, page }],
@@ -177,8 +288,8 @@ export function AuditPage() {
       const rows = allEntries.map((e) => [
         formatDateTime(e.createdAt),
         e.userNameSnap ?? '—',
-        actionLabels[e.action]?.label ?? e.action,
-        entityLabels[e.entityType] ?? e.entityType,
+        actionLabels[e.action]?.label ?? 'نشاط نظامي',
+        entityLabels[e.entityType] ?? 'سجل النظام',
         String(e.entityId ?? '—'),
         e.ipAddress ?? '—',
       ]);
@@ -303,12 +414,13 @@ export function AuditPage() {
               <TableHead className="text-right">البيانات المتأثرة</TableHead>
               <TableHead className="text-right">التفاصيل</TableHead>
               <TableHead className="text-right">عنوان IP</TableHead>
+              <TableHead className="text-right w-16">عرض</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isError ? (
               <TableRow>
-                <TableCell colSpan={6} className="p-4">
+                <TableCell colSpan={7} className="p-4">
                   <Alert variant="destructive">
                     <AlertDescription>
                       تعذر تحميل سجل التدقيق. تحقق من اتصال الخادم ثم أعد المحاولة.
@@ -318,19 +430,19 @@ export function AuditPage() {
               </TableRow>
             ) : isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                   جاري تحميل السجل...
                 </TableCell>
               </TableRow>
             ) : !data?.data.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                   {hasFilters ? 'لا توجد سجلات بهذه الفلاتر' : 'لا توجد سجلات بعد'}
                 </TableCell>
               </TableRow>
             ) : (
               data.data.map((entry) => {
-                const actionMeta = actionLabels[entry.action];
+                const actionMeta = actionLabels[entry.action] ?? DEFAULT_ACTION_META;
                 return (
                   <TableRow key={entry.id} className="hover:bg-muted/30">
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
@@ -342,14 +454,14 @@ export function AuditPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${actionMeta?.color ?? 'bg-gray-100 text-gray-700'}`}>
-                        {actionIcons[entry.action]}
-                        {actionMeta?.label ?? entry.action}
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${actionMeta.color}`}>
+                        {actionIcons[entry.action] ?? <Settings2 className="w-3.5 h-3.5" />}
+                        {actionMeta.label}
                       </span>
                     </TableCell>
                     <TableCell className="text-sm">
                       <span className="text-muted-foreground">
-                        {entityLabels[entry.entityType] ?? entry.entityType}
+                        {entityLabels[entry.entityType] ?? 'سجل النظام'}
                       </span>
                       {entry.entityId && (
                         <span className="mr-1.5 font-mono text-xs text-muted-foreground">
@@ -357,17 +469,33 @@ export function AuditPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
-                      {entry.details
-                        ? Object.entries(entry.details)
-                            .filter(([, v]) => v != null && v !== '')
-                            .map(([k, v]) => `${k}: ${String(v)}`)
-                            .slice(0, 2)
-                            .join(' — ')
-                        : '—'}
+                    <TableCell className="max-w-[280px]">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm text-muted-foreground">
+                          {getEntrySummary(entry)}
+                        </span>
+                        {entry.details && Object.keys(entry.details).length > 1 && (
+                          <Badge variant="secondary" className="shrink-0 text-[10px]">
+                            {Object.keys(entry.details).length} حقول
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {entry.ipAddress ?? '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="عرض تفاصيل السجل"
+                        aria-label={`عرض تفاصيل السجل رقم ${entry.id}`}
+                        onClick={() => setSelectedEntry(entry)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
@@ -401,6 +529,117 @@ export function AuditPage() {
           </Button>
         </div>
       )}
+
+      <Dialog
+        open={Boolean(selectedEntry)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedEntry(null);
+        }}
+      >
+        <DialogContent dir="rtl" className="max-w-2xl">
+          {selectedEntry && (() => {
+            const selectedAction = actionLabels[selectedEntry.action] ?? DEFAULT_ACTION_META;
+            const selectedDetails = Object.entries(selectedEntry.details ?? {})
+              .filter(([, value]) => value != null && value !== '');
+
+            return (
+              <>
+                <DialogHeader className="text-right">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Badge className={`gap-1.5 ${selectedAction.color}`}>
+                      {actionIcons[selectedEntry.action] ?? <Settings2 className="h-3.5 w-3.5" />}
+                      {selectedAction.label}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      سجل رقم {selectedEntry.id.toLocaleString('ar-SY')}
+                    </span>
+                  </div>
+                  <DialogTitle>تفاصيل سجل التدقيق</DialogTitle>
+                  <DialogDescription>
+                    تفاصيل كاملة للعملية المسجلة — للقراءة فقط.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                      <FileText className="h-3.5 w-3.5" />
+                      العملية والبيانات
+                    </div>
+                    <p className="text-sm font-semibold">
+                      {selectedAction.label} — {entityLabels[selectedEntry.entityType] ?? 'سجل النظام'}
+                      {selectedEntry.entityId && ` #${selectedEntry.entityId}`}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                      <UserRound className="h-3.5 w-3.5" />
+                      المستخدم المنفذ
+                    </div>
+                    <p className="text-sm font-semibold">
+                      {selectedEntry.userNameSnap ?? 'النظام'}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3 sm:col-span-2">
+                    <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                      <Clock3 className="h-3.5 w-3.5" />
+                      التاريخ والوقت
+                    </div>
+                    <p className="text-sm font-semibold">{formatExactDateTime(selectedEntry.createdAt)}</p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                      <Globe2 className="h-3.5 w-3.5" />
+                      عنوان IP
+                    </div>
+                    <p className="font-mono text-sm" dir="ltr">{selectedEntry.ipAddress ?? 'غير متوفر'}</p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      نوع السجل
+                    </div>
+                    <p className="text-sm font-semibold">
+                      {entityLabels[selectedEntry.entityType] ?? 'سجل النظام'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Settings2 className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold">البيانات المسجلة</h3>
+                  </div>
+                  {selectedDetails.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                      لا توجد تفاصيل إضافية لهذه العملية.
+                    </div>
+                  ) : (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {selectedDetails.map(([key, value]) => (
+                        <div key={key} className="rounded-lg border p-3">
+                          <p className="mb-1 text-xs text-muted-foreground">
+                            {DETAIL_LABELS[key] ?? 'تفصيل إضافي'}
+                          </p>
+                          <p className="break-words text-sm font-medium">
+                            {formatAuditValue(value, key)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setSelectedEntry(null)}>
+                    إغلاق
+                  </Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
