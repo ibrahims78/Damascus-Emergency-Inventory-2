@@ -27,10 +27,10 @@ router.get("/stats", requireAuth, async (_req, res) => {
     const today = nowUtc.toISOString().split("T")[0];
     const monthStart = new Date(
       Date.UTC(nowUtc.getUTCFullYear(), nowUtc.getUTCMonth(), 1)
-    ).toISOString();
+    );
     const prevMonthStart = new Date(
       Date.UTC(nowUtc.getUTCFullYear(), nowUtc.getUTCMonth() - 1, 1)
-    ).toISOString();
+    );
 
     const [
       totalItemsResult,
@@ -259,12 +259,12 @@ router.get("/charts", requireAuth, async (_req, res) => {
           COALESCE(SUM(CASE WHEN t.type = 'out' THEN COALESCE(t.quantity, 0) ELSE 0 END), 0)::int AS out_qty,
           COUNT(t.id)::int AS tx_count
         FROM generate_series(
-          (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Damascus')::date - INTERVAL '29 days',
-          (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Damascus')::date,
+          CURRENT_DATE - INTERVAL '29 days',
+          CURRENT_DATE,
           '1 day'::interval
         ) AS gs(d)
         LEFT JOIN transactions t
-          ON DATE(t.created_at AT TIME ZONE 'Asia/Damascus') = gs.d::date
+          ON DATE(t.created_at) = gs.d::date
           AND t.type IN ('in', 'out')
         GROUP BY gs.d
         ORDER BY gs.d ASC
