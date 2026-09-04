@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $root = 'D:\autoclaw projects\Damascus-Emergency-Inventory-autoclaw'
-$rel = Join-Path $root 'releases\v4.0.0'
+$rel = Join-Path $root 'release-artifacts\v4.0.0'
 $template = Join-Path $rel 'scripts\main-template.cjs'
 
 function Rebuild-ElectronVariant {
@@ -24,7 +24,7 @@ function Rebuild-ElectronVariant {
   $stage = Join-Path $work 'asar-stage'
   New-Item -ItemType Directory -Path (Join-Path $stage 'electron') -Force | Out-Null
   Copy-Item $template (Join-Path $stage 'electron\main.cjs') -Force
-  $preloadSrc = Join-Path $root 'releases\v3\electron\preload.cjs'
+  $preloadSrc = Join-Path $root 'release-artifacts\v3\electron\preload.cjs'
   if (Test-Path $preloadSrc) { Copy-Item $preloadSrc (Join-Path $stage 'electron\preload.cjs') -Force }
   $pkgJson = '{"name":"damascus-emergency-inventory-desktop","productName":"Damascus Emergency Inventory","version":"4.0.0","main":"electron/main.cjs"}'
   [System.IO.File]::WriteAllText((Join-Path $stage 'package.json'), $pkgJson, $utf8)
@@ -37,8 +37,8 @@ function Rebuild-ElectronVariant {
   New-Item -ItemType Directory -Path (Join-Path $stage 'app\schema') -Force | Out-Null
   Copy-Item (Join-Path $root 'lib\db\desktop-schema.sql') (Join-Path $stage 'app\schema\desktop-schema.sql') -Force
   # 3b) packaged license public key (server-side verify inside the asar)
-  $keySrc = Join-Path $root 'releases\v4.0.0\license-public-keys\windows.b64'
-'releases\v4.0.0\license-public-keys\windows.b64'
+  $keySrc = Join-Path $root 'release-artifacts\v4.0.0\license-public-keys\windows.b64'
+'release-artifacts\v4.0.0\license-public-keys\windows.b64'
   if (Test-Path $keySrc) {
     Copy-Item $keySrc (Join-Path $stage 'app\license-public-key.b64') -Force
   }

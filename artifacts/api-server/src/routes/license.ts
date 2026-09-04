@@ -26,7 +26,7 @@ const LICENSE_PUBLIC_KEY_CANDIDATES = [
   path.resolve(import.meta.dirname ?? process.cwd(), "../license-public-key.b64"),
   path.resolve(
     import.meta.dirname ?? process.cwd(),
-    "../../releases/v4.0.0/license-public-keys/windows.b64",
+    "../../../release-artifacts/v4.0.0/license-public-keys/windows.b64",
   ),
 ].filter((value): value is string => Boolean(value));
 

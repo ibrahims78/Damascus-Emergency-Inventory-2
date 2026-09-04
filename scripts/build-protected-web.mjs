@@ -18,7 +18,7 @@ if (!["windows", "android"].includes(platform)) {
   process.exit(1);
 }
 const root = path.resolve(import.meta.dirname ?? process.cwd(), "..");
-const keyFile = path.join(root, "releases", "v4.0.0", "license-public-keys", `${platform}.b64`);
+const keyFile = path.join(root, "release-artifacts", "v4.0.0", "license-public-keys", `${platform}.b64`);
 if (!fs.existsSync(keyFile)) {
   console.error(`platform public key not found: ${keyFile}`);
   process.exit(1);

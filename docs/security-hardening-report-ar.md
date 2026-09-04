@@ -73,7 +73,7 @@
 - **الإصلاح:** التقسيم إلى **10 ملفات** تحت `pages/settings/`: index (الصدفة)، profile، password، activity، org، units، technical، backup، catalog (تصنيفات/جهات/أسباب)، import (مواد/تجهيزات) — مع نقل الأنواع والمساعدات المشتركة لكل وحدة.
 - **الاختبار:** typecheck الويب 0 أخطاء + البناء الكامل نجح.
 
-**10. releases/ يحوي 178MB ثنائيات (منها مجلد مفكوك ~150MB)**
+**10. release-artifacts/ يحوي 178MB ثنائيات (منها مجلد مفكوك ~150MB)**
 - **الإصلاح:** حذف مجلد Electron المفكوك (`v3.0.5/Damascus Emergency Inventory 3.0.5/`) من التتبع، إبقاء الأرشيفات + SHA256SUMS (الحجم المتبقي: **29MB**)، وتنظيف `.gitattributes` من قواعد LFS للملفات المحذوفة.
 - **التوصية المتبقية:** رفع الأرشيفات إلى صفحة GitHub Releases عند الدفع (يحتاج صلاحيات الدفع).
 
@@ -148,5 +148,5 @@ ALL SUITES PASSED
 | الويب | `lib/offline-api.ts` (PBKDF2)، `lib/csrf-client.ts`، `main.tsx`، `pages/login.tsx`، `pages/change-password.tsx`، `pages/settings/*` (تقسيم)، `package.json` (xlsx 0.20.3) |
 | CI والجودة | `.github/workflows/ci.yml`، `scripts/ci-e2e.sh`، `eslint.config.js`، `package.json` (lint) |
 | أندرويد | `android/app/build.gradle` (توقيع الإصدار) |
-| المستودع | `.gitattributes`، حذف المجلد المفكوك من releases |
+| المستودع | `.gitattributes`، حذف المجلد المفكوك من release-artifacts |
 | اختبارات | `docs/tests/api-security-tests.mjs`، `docs/tests/offline-password.test.mjs` (+ تحديث الموجودتين) |

@@ -133,7 +133,7 @@ Recharts            Capacitor (أندرويد)
 │   ├── backup-format/      # صيغة حزم النسخ والمزامنة المشفرة
 │   └── api-spec/           # مواصفة OpenAPI (مصدر الحقيقة)
 ├── android/                # مشروع أندرويد
-├── releases/v4.0.0/        # سكربتات التجميع والتوقيع والمولّدات
+├── release-artifacts/v4.0.0/        # سكربتات التجميع والتوقيع والمولّدات
 ├── docs/                   # أدلة التشغيل والمستخدم وقواعد المجال
 └── scripts/                # أدوات الاستيراد وإصدار التراخيص + CI
 ```
@@ -154,8 +154,8 @@ pnpm run build                  # بناء كامل
 # بناء حزم الإصدار
 node scripts/build-protected-web.mjs windows          # واجهة النسخة المحمية
 pnpm --filter @workspace/api-server run build:protected
-./releases/v4.0.0/scripts/reassemble-electron.ps1     # حزمتا ويندوز
-./releases/v4.0.0/android/build-android-apk.ps1       # حزمتا أندرويد (يتطلب Android Studio)
+./release-artifacts/v4.0.0/scripts/reassemble-electron.ps1     # حزمتا ويندوز
+./release-artifacts/v4.0.0/android/build-android-apk.ps1       # حزمتا أندرويد (يتطلب Android Studio)
 ```
 
 اختبارات CI تعمل تلقائياً عبر `.github/workflows/ci.yml` (مزامنة + أمان + قواعد بيانات على مثيلين حيين).

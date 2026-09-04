@@ -8,7 +8,7 @@
 ## محتويات هذا المجلد
 
 ```
-releases/v4.0.0/
+release-artifacts/v4.0.0/
 ├── windows/
 │   ├── Damascus-Emergency-Inventory-v4.0.0-Windows-Offline.zip     ← النسخة العادية (ويندوز، أوفلاين)
 │   ├── Damascus-Emergency-Inventory-v4.0.0-Windows-Protected.zip   ← النسخة المحمية (تفعيل بترخيص)

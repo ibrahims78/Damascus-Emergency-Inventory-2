@@ -14,7 +14,7 @@ export default tseslint.config(
       'lib/api-zod/src/generated/**',
       'lib/api-client-react/src/**',
       'lib/api-zod/src/**',
-      'releases/**',
+      'release-artifacts/**',
       'android/**',
       'scripts/**',
       'docs/tests/**',

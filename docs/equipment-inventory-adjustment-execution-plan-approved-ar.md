@@ -70,7 +70,7 @@
 | **التوصية** | إضافة عمود واحد `details jsonb` في `transactions` يحفظ: `{ previousStock, newStock, delta, deltaType, equipmentNameSnap, equipmentModelSnap, equipmentSerialSnap, equipmentConditionSnap }` |
 | **البديل أ** | 5 أعمدة منفصلة (`equipment_name_snap`, `equipment_model_snap`, `equipment_serial_snap`, `equipment_condition_snap`, `stock_before_snap`) — أدق للفهرسة، أثقل للترحيل |
 | **البديل ب** | الاعتماد على الربط الحي بجدول التجهيز (بدون لقطة) — **مرفوض**: تغيّر الاسم لاحقاً يفسد السند التاريخي |
-| **الأثر** | migration واحد (`ALTER TABLE transactions ADD COLUMN details jsonb`) + تحديث `desktop-schema.sql` + نسخة `releases/v3/app/schema` |
+| **الأثر** | migration واحد (`ALTER TABLE transactions ADD COLUMN details jsonb`) + تحديث `desktop-schema.sql` + نسخة `release-artifacts/v3/app/schema` |
 | **القرار المعتمد** | ✅ **الخيار الموصى به: عمود `details jsonb` واحد** (26-08-2026) |
 
 ### 3.2 سياسة العملاء القدامى في المزامنة 🔴
@@ -392,7 +392,7 @@ POST /api/transactions/adjust
 
 **قاعدة البيانات:**
 - `lib/db/src/schema/transactions.ts` — عمود `details: jsonb` في مخطط Drizzle.
-- `lib/db/desktop-schema.sql` + `releases/v3/app/schema/desktop-schema.sql` — العمود في مخطط سطح المكتب (الإصداران).
+- `lib/db/desktop-schema.sql` + `release-artifacts/v3/app/schema/desktop-schema.sql` — العمود في مخطط سطح المكتب (الإصداران).
 - `lib/db/drizzle/0006_equipment_adjust_details.sql` — هجرة جديدة للاستضافات PostgreSQL.
 - `lib/db/src/index.ts` — تهجير ذاتي غير قاطع (`ADD COLUMN IF NOT EXISTS`) لقواعد PGlite الموجودة عند الإقلاع.
 
