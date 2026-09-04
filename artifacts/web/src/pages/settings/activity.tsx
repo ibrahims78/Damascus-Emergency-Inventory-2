@@ -148,7 +148,7 @@ export function ActivityTab() {
       <div className="flex items-center justify-between px-5 py-3.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <Activity className="h-4 w-4 text-muted-foreground" />
-          <span className="font-semibold text-sm">آخر {entries.length} نشاطات</span>
+            <span className="font-semibold text-sm">آخر {entries.length} نشاطًا</span>
         </div>
         <span className="text-xs text-muted-foreground">يتجدد تلقائياً</span>
       </div>
@@ -166,14 +166,9 @@ export function ActivityTab() {
       ) : (
         <div className="divide-y">
           {entries.map(entry => {
-            const meta = ACT_META[entry.action];
-            const entityAr = ENTITY_AR[entry.entityType] ?? entry.entityType;
-            const detailText = entry.details
-              ? (entry.details.username as string) ||
-                (entry.details.fullName as string) ||
-                (entry.details.name as string) ||
-                (entry.entityId ? `#${entry.entityId}` : '')
-              : '';
+             const meta = ACT_META[entry.action] ?? DEFAULT_ACTIVITY_META;
+             const entityAr = ENTITY_AR[entry.entityType] ?? 'سجل النظام';
+             const detailText = formatActivityDetail(entry);
             return (
               <div key={entry.id} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/20 transition-colors">
                 {/* Action badge */}
@@ -214,21 +209,105 @@ interface AuditEntry {
 }
 
 const ACT_META: Record<string, { label: string; icon: ReactNode; color: string }> = {
-  login:           { label: '╪»╪«┘ê┘ä ┘ä┘ä┘å╪╕╪º┘à',   icon: <LogIn className="w-3.5 h-3.5" />,              color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
-  logout:          { label: '╪«╪▒┘ê╪¼',           icon: <LogOutIcon className="w-3.5 h-3.5" />,         color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
-  create:          { label: '╪Ñ╪╢╪º┘ü╪⌐',          icon: <Plus className="w-3.5 h-3.5" />,               color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
-  update:          { label: '╪¬╪╣╪»┘è┘ä',          icon: <Pencil className="w-3.5 h-3.5" />,             color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' },
-  delete:          { label: '╪¡╪░┘ü',            icon: <Trash2 className="w-3.5 h-3.5" />,             color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
-  transaction_in:  { label: '╪Ñ╪»╪«╪º┘ä ┘à┘ê╪º╪»',    icon: <ArrowDownToLine className="w-3.5 h-3.5" />,    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
-  transaction_out: { label: '╪Ñ╪«╪▒╪º╪¼ ┘à┘ê╪º╪»',    icon: <ArrowUpFromLine className="w-3.5 h-3.5" />,    color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
+  login:           { label: 'دخول للنظام',     icon: <LogIn className="w-3.5 h-3.5" />,              color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  logout:          { label: 'خروج من النظام',   icon: <LogOutIcon className="w-3.5 h-3.5" />,         color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
+  create:          { label: 'إضافة',            icon: <Plus className="w-3.5 h-3.5" />,               color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
+  update:          { label: 'تعديل',            icon: <Pencil className="w-3.5 h-3.5" />,             color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' },
+  delete:          { label: 'حذف',              icon: <Trash2 className="w-3.5 h-3.5" />,             color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
+  deactivate:      { label: 'تعطيل',            icon: <Power className="w-3.5 h-3.5" />,              color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
+  activate:        { label: 'تفعيل',            icon: <CheckCircle2 className="w-3.5 h-3.5" />,       color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  transaction_in:  { label: 'إدخال مواد',       icon: <ArrowDownToLine className="w-3.5 h-3.5" />,    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  transaction_out: { label: 'إخراج مواد',       icon: <ArrowUpFromLine className="w-3.5 h-3.5" />,    color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
+  movement_created: { label: 'تسجيل حركة',      icon: <CheckCircle2 className="w-3.5 h-3.5" />,       color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  movement_failed:  { label: 'فشل حركة',        icon: <X className="w-3.5 h-3.5" />,                  color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
+  backup_export:   { label: 'تصدير نسخة',       icon: <Download className="w-3.5 h-3.5" />,           color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
+  backup_restore:  { label: 'استعادة نسخة',     icon: <DatabaseBackup className="w-3.5 h-3.5" />,     color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
+  backup_catalog_create: { label: 'إنشاء سجل نسخة', icon: <DatabaseBackup className="w-3.5 h-3.5" />, color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
+  backup_package_export: { label: 'تصدير حزمة نسخة', icon: <Download className="w-3.5 h-3.5" />, color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
+  backup_package_restore: { label: 'استعادة حزمة نسخة', icon: <DatabaseBackup className="w-3.5 h-3.5" />, color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
+  backup_restore_rollback: { label: 'التراجع عن الاستعادة', icon: <ArrowUpFromLine className="w-3.5 h-3.5" />, color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' },
+  license_activated: { label: 'تفعيل الترخيص', icon: <ShieldCheck className="w-3.5 h-3.5" />, color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  sync_session_create: { label: 'إنشاء جلسة مزامنة', icon: <Activity className="w-3.5 h-3.5" />, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_session_handshake: { label: 'مصافحة جلسة مزامنة', icon: <Activity className="w-3.5 h-3.5" />, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_package_apply: { label: 'تطبيق حزمة مزامنة', icon: <Activity className="w-3.5 h-3.5" />, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_package_ack: { label: 'تأكيد حزمة مزامنة', icon: <CheckCircle2 className="w-3.5 h-3.5" />, color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  sync_pairing_consume: { label: 'استخدام رمز اقتران', icon: <Activity className="w-3.5 h-3.5" />, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_trusted_node_revoke: { label: 'إلغاء عقدة موثوقة', icon: <Trash2 className="w-3.5 h-3.5" />, color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
+  sync_conflict_resolve: { label: 'حل تعارض مزامنة', icon: <CheckCircle2 className="w-3.5 h-3.5" />, color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  sync_relay_upload: { label: 'رفع حزمة للمزامنة', icon: <Download className="w-3.5 h-3.5" />, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_exchange: { label: 'تبادل بيانات', icon: <Activity className="w-3.5 h-3.5" />, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+  sync_exchange_rejected_signature: { label: 'رفض توقيع المزامنة', icon: <X className="w-3.5 h-3.5" />, color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
+  sync_package_export: { label: 'تصدير حزمة مزامنة', icon: <Download className="w-3.5 h-3.5" />, color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
+  sync_package_import: { label: 'استيراد حزمة مزامنة', icon: <Upload className="w-3.5 h-3.5" />, color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300' },
+  sync_package_import_merge: { label: 'دمج حزمة مزامنة', icon: <Activity className="w-3.5 h-3.5" />, color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
 };
 
 const ENTITY_AR: Record<string, string> = {
-  item:        '┘à╪º╪»╪⌐',
-  equipment:   '╪¬╪¼┘ç┘è╪▓╪⌐',
-  transaction: '╪╣┘à┘ä┘è╪⌐',
-  user:        '┘à╪│╪¬╪«╪»┘à',
-  category:    '╪¬╪╡┘å┘è┘ü',
+  item:               'مادة',
+  equipment:          'تجهيز',
+  transaction:        'عملية',
+  user:               'مستخدم',
+  category:           'تصنيف',
+  recipient:           'جهة مستلمة',
+  exit_reason:         'سبب إخراج',
+  backup:              'نسخة احتياطية',
+  sync_session:        'جلسة مزامنة',
+  sync_package:        'حزمة مزامنة',
+  sync_trusted_node:  'عقدة موثوقة',
+  sync_relay_package: 'حزمة ترحيل',
+  sync_conflict:       'تعارض مزامنة',
+  inventory_batch:     'دفعة مخزنية',
+  batch_allocation:    'تخصيص دفعة',
+  personal_custody:    'عهدة شخصية',
+  custody_return:      'إعادة عهدة',
+  damage_record:       'سجل تلف',
+  central_return:      'إعادة مركزية',
+  license:             'ترخيص',
+  settings:            'الإعدادات',
 };
+
+const DEFAULT_ACTIVITY_META = {
+  label: 'نشاط نظامي',
+  icon: <Activity className="w-3.5 h-3.5" />,
+  color: 'bg-muted text-muted-foreground',
+};
+
+const DETAIL_LABELS: Record<string, string> = {
+  username: 'المستخدم',
+  fullName: 'الاسم',
+  name: 'الاسم',
+  itemName: 'المادة',
+  equipmentName: 'التجهيز',
+  role: 'الصلاحية',
+  isActive: 'الحالة',
+  nodeId: 'العقدة',
+  bytes: 'الحجم',
+  message: 'الرسالة',
+};
+
+function formatActivityValue(value: unknown): string {
+  if (typeof value === 'boolean') return value ? 'مفعّل' : 'غير مفعّل';
+  if (typeof value === 'number') return value.toLocaleString('ar-SY');
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value);
+}
+
+function formatActivityDetail(entry: AuditEntry): string {
+  const details = entry.details ?? {};
+  const preferredKeys = ['name', 'itemName', 'equipmentName', 'fullName', 'username', 'message'];
+  const preferred = preferredKeys
+    .map(key => [key, details[key]] as const)
+    .find(([, value]) => value != null && value !== '');
+  const firstDetail = Object.entries(details).find(([, value]) => value != null && value !== '');
+  const detail = preferred ?? firstDetail;
+
+  if (detail) {
+    const [key, value] = detail;
+    const formatted = formatActivityValue(value);
+    return `${DETAIL_LABELS[key] ?? 'التفاصيل'}: ${formatted}`;
+  }
+
+  return entry.entityId ? `السجل رقم ${entry.entityId.toLocaleString('ar-SY')}` : '';
+}
 
 
