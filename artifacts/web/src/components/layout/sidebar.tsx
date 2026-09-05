@@ -22,7 +22,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import logoUrl from '@assets/logo.jpeg';
 import { useSidebar } from './sidebar-context';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -66,32 +66,67 @@ export function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const mobileToggleRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
 
   const isRouteActive = (href: string) =>
     href === '/' ? location === '/' : location.startsWith(href);
   const movementActive = movementItems.some(item => isRouteActive(item.href));
   const adminActive = adminItems.some(item => isRouteActive(item.href));
 
+  useEffect(() => {
+    if (!isMobileOpen) return;
+
+    const firstLink = sidebarRef.current?.querySelector<HTMLElement>(
+      '[data-sidebar-first-link="true"]',
+    );
+    window.requestAnimationFrame(() => firstLink?.focus());
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setIsMobileOpen(false);
+      window.requestAnimationFrame(() => mobileToggleRef.current?.focus());
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isMobileOpen]);
+
+  const closeMobileMenu = () => {
+    setIsMobileOpen(false);
+    window.requestAnimationFrame(() => mobileToggleRef.current?.focus());
+  };
+
   return (
     <TooltipProvider delayDuration={200}>
       {/* Mobile Toggle */}
       <button
+        ref={mobileToggleRef}
         className="md:hidden fixed bottom-4 right-4 z-50 p-3 bg-primary text-primary-foreground rounded-full shadow-lg print:hidden"
         onClick={() => setIsMobileOpen(!isMobileOpen)}
+        type="button"
+        aria-expanded={isMobileOpen}
+        aria-controls="primary-navigation"
+        aria-label={isMobileOpen ? 'إغلاق القائمة الجانبية' : 'فتح القائمة الجانبية'}
       >
-        {isMobileOpen ? <X size={22} /> : <Menu size={22} />}
+        {isMobileOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
       </button>
 
       {/* Mobile Backdrop */}
       {isMobileOpen && (
         <div
           className="md:hidden fixed inset-0 z-40 bg-background/80 backdrop-blur-sm print:hidden"
-          onClick={() => setIsMobileOpen(false)}
+          onClick={closeMobileMenu}
+          aria-hidden="true"
         />
       )}
 
       {/* Sidebar */}
       <aside
+        ref={sidebarRef}
+        id="primary-navigation"
+        aria-label="التنقل الرئيسي"
         className={cn(
           'fixed md:static inset-y-0 right-0 z-40 border-l bg-card flex flex-col',
           'transition-all duration-300 ease-in-out',
@@ -117,7 +152,7 @@ export function Sidebar() {
           {!collapsed && (
             <div className="min-w-0">
               <h1 className="font-bold text-sm text-foreground leading-snug">
-                منظومة الاحالة و الاسعاف و الطوارئ - دمشق
+                منظومة الإحالة والإسعاف والطوارئ — دمشق
               </h1>
             </div>
           )}
@@ -126,6 +161,7 @@ export function Sidebar() {
         {/* Desktop collapse toggle */}
         <button
           onClick={toggle}
+          type="button"
           className={cn(
             'hidden md:flex items-center justify-center h-7 w-7 rounded-md',
             'text-muted-foreground hover:text-foreground hover:bg-secondary',
@@ -133,10 +169,12 @@ export function Sidebar() {
             'bg-card border shadow-sm',
           )}
           title={collapsed ? 'توسيع الشريط الجانبي' : 'طي الشريط الجانبي'}
+          aria-label={collapsed ? 'توسيع الشريط الجانبي' : 'طي الشريط الجانبي'}
+          aria-expanded={!collapsed}
         >
           {collapsed
-            ? <ChevronsLeft className="w-3.5 h-3.5" />
-            : <ChevronsRight className="w-3.5 h-3.5" />
+            ? <ChevronsLeft className="w-3.5 h-3.5" aria-hidden="true" />
+            : <ChevronsRight className="w-3.5 h-3.5" aria-hidden="true" />
           }
         </button>
 
@@ -149,6 +187,8 @@ export function Sidebar() {
             const linkEl = (
               <Link
                 href={item.href}
+                aria-label={item.label}
+                data-sidebar-first-link={item.href === navItems[0].href ? 'true' : undefined}
                 className={cn(
                   'flex items-center rounded-md text-sm font-medium transition-colors',
                   collapsed
@@ -158,9 +198,9 @@ export function Sidebar() {
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
                 )}
-                onClick={() => setIsMobileOpen(false)}
+                onClick={closeMobileMenu}
               >
-                <Icon className="w-[18px] h-[18px] flex-shrink-0" />
+                <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
                 {!collapsed && <span>{item.label}</span>}
               </Link>
             );
@@ -213,6 +253,7 @@ export function Sidebar() {
                 const linkEl = (
                   <Link
                     href={item.href}
+                    aria-label={item.label}
                     className={cn(
                       'flex items-center rounded-md text-sm font-medium transition-colors',
                       collapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2',
@@ -220,9 +261,9 @@ export function Sidebar() {
                         ? 'bg-primary text-primary-foreground shadow-sm'
                         : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
                     )}
-                    onClick={() => setIsMobileOpen(false)}
+                    onClick={closeMobileMenu}
                   >
-                    <Icon className="w-[18px] h-[18px] flex-shrink-0" />
+                    <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
                     {!collapsed && <span>{item.label}</span>}
                   </Link>
                 );
@@ -269,6 +310,7 @@ export function Sidebar() {
                   const linkEl = (
                     <Link
                       href={item.href}
+                      aria-label={item.label}
                       className={cn(
                         'flex items-center rounded-md text-sm font-medium transition-colors',
                         collapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2',
@@ -276,9 +318,9 @@ export function Sidebar() {
                           ? 'bg-primary text-primary-foreground shadow-sm'
                           : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
                       )}
-                      onClick={() => setIsMobileOpen(false)}
+                      onClick={closeMobileMenu}
                     >
-                      <Icon className="w-[18px] h-[18px] flex-shrink-0" />
+                      <Icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
                       {!collapsed && <span>{item.label}</span>}
                     </Link>
                   );

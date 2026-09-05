@@ -213,6 +213,14 @@ function AlertRow({ alert, isAdmin, onNavigate }: AlertRowProps) {
         'cursor-pointer'
       )}
       onClick={handleNavigate}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          handleNavigate();
+        }
+      }}
+      role="button"
+      tabIndex={0}
       title="اضغط للانتقال إلى السجل"
     >
       {/* Severity icon */}
@@ -245,11 +253,12 @@ function AlertRow({ alert, isAdmin, onNavigate }: AlertRowProps) {
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex flex-col gap-1 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
         {!alert.isRead && (
           <button
             onClick={handleMarkRead}
             title="تأشير كمقروء"
+            aria-label="تأشير التنبيه كمقروء"
             className="text-muted-foreground hover:text-primary p-0.5 rounded"
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
@@ -259,13 +268,14 @@ function AlertRow({ alert, isAdmin, onNavigate }: AlertRowProps) {
           <button
             onClick={handleResolve}
             title="تم المعالجة"
+            aria-label="تحديد التنبيه كتمت معالجته"
             className="text-muted-foreground hover:text-green-600 p-0.5 rounded"
             disabled={resolve.isPending}
           >
             <CheckCheck className="h-3.5 w-3.5" />
           </button>
         )}
-        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 mt-auto" />
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 mt-auto" aria-hidden="true" />
       </div>
     </div>
   );
@@ -361,7 +371,7 @@ export function Header() {
     <header className="h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 sticky top-0 z-30">
       <div className="min-w-0 max-w-[55%] hidden sm:block text-right" dir="rtl">
         <p className="truncate text-sm font-semibold text-foreground">
-          {systemSettings?.orgName ?? 'منظومة الإسعاف والطوارئ'}
+          {systemSettings?.orgName ?? 'منظومة الإحالة والإسعاف والطوارئ'}
         </p>
         {systemSettings?.orgSubtitle && (
           <p className="truncate text-[11px] text-muted-foreground mt-0.5">
@@ -529,7 +539,11 @@ export function Header() {
         {/* ── User menu ── */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2 pl-2">
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 pl-2"
+              aria-label={`قائمة المستخدم${user?.fullName ? `: ${user.fullName}` : ''}`}
+            >
               <div className={cn(
                 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0',
                 user?.role === 'admin'

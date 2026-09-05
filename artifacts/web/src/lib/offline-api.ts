@@ -110,7 +110,7 @@ function initialState(): OfflineState {
       id: 1,
       setupCompleted: false,
       setupAt: null,
-      orgName: 'منظومة الاحالة و الاسعاف و الطوارئ - دمشق',
+      orgName: 'منظومة الإحالة والإسعاف والطوارئ — دمشق',
       orgSubtitle: null,
       expiryAlertDays: 30,
       unitsList: null,

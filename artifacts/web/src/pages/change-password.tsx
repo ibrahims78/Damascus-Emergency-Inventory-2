@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useGetCurrentUser, useChangePassword } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/auth/password-input';
 import {
   Form,
   FormControl,
@@ -51,7 +51,7 @@ export function ChangePasswordPage() {
       onError: (err: any) => {
         const status = err?.response?.status;
         if (status === 401) setErrorMsg('كلمة المرور الحالية غير صحيحة.');
-        else if (status === 400) setErrorMsg(err?.response?.data?.error ?? 'كلمة المرور الجديدة لا تستوفي السياسة.');
+        else if (status === 400) setErrorMsg('كلمة المرور الجديدة لا تستوفي السياسة المطلوبة.');
         else setErrorMsg('حدث خطأ أثناء تغيير كلمة المرور. حاول مرة أخرى.');
       },
     },
@@ -105,7 +105,7 @@ export function ChangePasswordPage() {
                   <FormItem>
                     <FormLabel>كلمة المرور الحالية</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="current-password" dir="ltr" {...field} />
+                      <PasswordInput autoComplete="current-password" dir="ltr" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -118,7 +118,7 @@ export function ChangePasswordPage() {
                   <FormItem>
                     <FormLabel>كلمة المرور الجديدة</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" dir="ltr" {...field} />
+                      <PasswordInput autoComplete="new-password" dir="ltr" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -131,7 +131,7 @@ export function ChangePasswordPage() {
                   <FormItem>
                     <FormLabel>تأكيد كلمة المرور الجديدة</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" dir="ltr" {...field} />
+                      <PasswordInput autoComplete="new-password" dir="ltr" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

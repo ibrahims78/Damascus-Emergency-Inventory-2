@@ -6,6 +6,9 @@ import { z } from 'zod';
 import { useLogin, useGetCurrentUser, useGetSetupStatus } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/auth/password-input';
+import { AuthShell } from '@/components/auth/auth-shell';
+import { ConnectionErrorState, LoadingState } from '@/components/app-state';
 import { 
   Form, 
   FormControl, 
@@ -17,7 +20,6 @@ import {
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { storeCsrfToken } from '@/lib/csrf-client';
-import logoUrl from '@assets/logo.jpeg';
 
 const loginSchema = z.object({
   username: z.string().min(1, 'اسم المستخدم مطلوب'),
@@ -28,8 +30,19 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export function LoginPage() {
   const [location, setLocation] = useLocation();
-  const { data: user, isLoading: isCheckingUser } = useGetCurrentUser();
-  const { data: setupStatus, isLoading: isCheckingSetup } = useGetSetupStatus();
+  const {
+    data: user,
+    isLoading: isCheckingUser,
+    isError: isUserError,
+    error: userError,
+    refetch: refetchUser,
+  } = useGetCurrentUser();
+  const {
+    data: setupStatus,
+    isLoading: isCheckingSetup,
+    isError: isSetupError,
+    refetch: refetchSetup,
+  } = useGetSetupStatus();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const loginMutation = useLogin({
@@ -76,7 +89,31 @@ export function LoginPage() {
     }
   }, [isCheckingUser, user, location, setLocation]);
 
-  if (isCheckingUser || isCheckingSetup) return null;
+  const userStatus = (userError as unknown as { response?: { status?: number } } | null | undefined)
+    ?.response?.status;
+  const hasConnectionError =
+    isSetupError || (isUserError && userStatus !== 401 && userStatus !== 403);
+
+  if (isCheckingUser || isCheckingSetup) {
+    return (
+      <AuthShell>
+        <LoadingState label="جاري تجهيز تسجيل الدخول..." />
+      </AuthShell>
+    );
+  }
+  if (hasConnectionError) {
+    return (
+      <AuthShell>
+        <ConnectionErrorState
+          onRetry={() => {
+            void refetchUser();
+            void refetchSetup();
+          }}
+          description="تعذر التحقق من حالة النظام. تحقق من اتصال الخادم ثم حاول مرة أخرى."
+        />
+      </AuthShell>
+    );
+  }
   if (setupStatus?.needsSetup || user) return null;
 
   const onSubmit = (data: LoginFormValues) => {
@@ -85,19 +122,13 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-secondary flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-card rounded-xl shadow-xl overflow-hidden border">
-        <div className="p-8 pb-6 text-center bg-muted/50 border-b">
-          <img 
-            src={logoUrl} 
-            alt="شعار منظومة الإحالة والإسعاف والطوارئ"
-            className="w-24 h-24 mx-auto object-contain rounded-full shadow-md bg-white p-2 mb-4" 
-          />
-          <h1 className="text-2xl font-bold text-foreground">منظومة الاحالة و الاسعاف و الطوارئ - دمشق</h1>
-        </div>
-        
-        <div className="p-8">
-          <h2 className="text-xl font-semibold mb-6 text-center">تسجيل الدخول للنظام</h2>
+    <AuthShell>
+          <div className="mb-6 space-y-1 text-right">
+            <h2 className="text-xl font-bold">تسجيل الدخول</h2>
+            <p className="text-sm leading-6 text-muted-foreground">
+              أدخل بيانات حسابك للوصول إلى لوحة التحكم وإدارة المخزون.
+            </p>
+          </div>
           
           {errorMsg && (
             <Alert variant="destructive" className="mb-6">
@@ -134,8 +165,7 @@ export function LoginPage() {
                   <FormItem>
                     <FormLabel>كلمة المرور</FormLabel>
                     <FormControl>
-                      <Input
-                        type="password"
+                      <PasswordInput
                         placeholder="أدخل كلمة المرور"
                         autoComplete="current-password"
                         {...field}
@@ -147,9 +177,9 @@ export function LoginPage() {
                   </FormItem>
                 )}
               />
-              <Button 
-                type="submit" 
-                className="w-full mt-6" 
+              <Button
+                type="submit"
+                className="mt-6 w-full"
                 size="lg"
                 disabled={loginMutation.isPending}
               >
@@ -157,8 +187,6 @@ export function LoginPage() {
               </Button>
             </form>
           </Form>
-        </div>
-      </div>
-    </div>
+    </AuthShell>
   );
 }

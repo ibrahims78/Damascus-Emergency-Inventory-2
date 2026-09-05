@@ -6,6 +6,9 @@ import { z } from 'zod';
 import { useSetupAdmin, useGetSetupStatus } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/auth/password-input';
+import { AuthShell } from '@/components/auth/auth-shell';
+import { ConnectionErrorState, LoadingState } from '@/components/app-state';
 import {
   Form,
   FormControl,
@@ -16,7 +19,6 @@ import {
 } from '@/components/ui/form';
 import { AlertCircle, ShieldCheck } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import logoUrl from '@assets/logo.jpeg';
 
 const setupSchema = z
   .object({
@@ -45,7 +47,12 @@ export function SetupPage() {
   const [location, setLocation] = useLocation();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const { data: status, isLoading: isCheckingStatus } = useGetSetupStatus();
+  const {
+    data: status,
+    isLoading: isCheckingStatus,
+    isError: isStatusError,
+    refetch: refetchStatus,
+  } = useGetSetupStatus();
 
   const setupMutation = useSetupAdmin({
     mutation: {
@@ -78,7 +85,26 @@ export function SetupPage() {
     }
   }, [isCheckingStatus, status, location, setLocation]);
 
-  if (isCheckingStatus || (status && !status.needsSetup)) return null;
+  if (isCheckingStatus) {
+    return (
+      <AuthShell>
+        <LoadingState label="جاري التحقق من إعداد النظام..." />
+      </AuthShell>
+    );
+  }
+  if (isStatusError) {
+    return (
+      <AuthShell>
+        <ConnectionErrorState
+          onRetry={() => {
+            void refetchStatus();
+          }}
+          description="تعذر التحقق من حالة الإعداد الأولي. تحقق من اتصال الخادم ثم حاول مرة أخرى."
+        />
+      </AuthShell>
+    );
+  }
+  if (status && !status.needsSetup) return null;
 
   const onSubmit = (data: SetupFormValues) => {
     setErrorMsg(null);
@@ -88,20 +114,7 @@ export function SetupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-secondary flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-card rounded-xl shadow-xl overflow-hidden border">
-        {/* Header */}
-        <div className="p-8 pb-6 text-center bg-muted/50 border-b">
-          <img
-            src={logoUrl}
-            alt="شعار منظومة الإحالة والإسعاف والطوارئ"
-            className="w-24 h-24 mx-auto object-contain rounded-full shadow-md bg-white p-2 mb-4"
-          />
-          <h1 className="text-2xl font-bold text-foreground">منظومة الاحالة و الاسعاف و الطوارئ - دمشق</h1>
-        </div>
-
-        {/* Setup Form */}
-        <div className="p-8">
+    <AuthShell>
           <div className="flex items-center gap-2 mb-2">
             <ShieldCheck className="h-5 w-5 text-primary" />
             <h2 className="text-xl font-semibold">إعداد حساب المدير</h2>
@@ -158,8 +171,7 @@ export function SetupPage() {
                   <FormItem>
                     <FormLabel>كلمة المرور</FormLabel>
                     <FormControl>
-                      <Input
-                        type="password"
+                      <PasswordInput
                         placeholder="12 حرفاً: كبير وصغير ورقم ورمز"
                         {...field}
                         dir="ltr"
@@ -178,8 +190,7 @@ export function SetupPage() {
                   <FormItem>
                     <FormLabel>تأكيد كلمة المرور</FormLabel>
                     <FormControl>
-                      <Input
-                        type="password"
+                      <PasswordInput
                         placeholder="أعد إدخال كلمة المرور"
                         {...field}
                         dir="ltr"
@@ -201,8 +212,6 @@ export function SetupPage() {
               </Button>
             </form>
           </Form>
-        </div>
-      </div>
-    </div>
+    </AuthShell>
   );
 }
