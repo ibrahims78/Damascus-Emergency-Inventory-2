@@ -1,14 +1,18 @@
-// API security hardening tests — run against live instances (A:8080, B:8081)
+// API security hardening tests — run against live instances (A/B ports are
+// configurable so the suite can run beside the main development workflow).
 // seeded with SEED_ADMIN_PASSWORD. Covers: security headers, body-size
 // limits, CSRF protection, DB-backed rate limiting, must-change-password
-// flow (fresh random-password seed on :8082), and sync signature verification.
+// flow (fresh random-password seed on a separate configurable port), and sync
+// signature verification.
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const A = 'http://127.0.0.1:8080';
-const B = 'http://127.0.0.1:8081';
+const A = process.env.SECURITY_A || 'http://127.0.0.1:8080';
+const B = process.env.SECURITY_B || 'http://127.0.0.1:8081';
+const FRESH_PORT = Number(process.env.SECURITY_FRESH_PORT || 8082);
+const FRESH = `http://127.0.0.1:${FRESH_PORT}`;
 const ADMIN = 'admin';
 const ADMIN_PW = process.env.SEED_ADMIN_PASSWORD ?? '***';
 
@@ -195,12 +199,12 @@ await t('exported package is signed and verifies on import', async () => {
     ? true : { status: importRes.status, sig: importRes.body?.signatureVerification, body: importRes.body };
 });
 
-// ── mustChangePassword + random seed (fresh instance on :8082) ───────────────
+// ── mustChangePassword + random seed (fresh isolated instance) ──────────────
 await t('fresh seed: random password + mustChangePassword flow', async () => {
   try {
-    const stale = await fetch('http://127.0.0.1:8082/api/healthz');
-    if (stale.ok) return { stale8082: 'a server is still listening on 8082 from a previous run' };
-  } catch { /* nothing on 8082 — good */ }
+    const stale = await fetch(`${FRESH}/api/healthz`);
+    if (stale.ok) return { [`stale${FRESH_PORT}`]: `a server is still listening on ${FRESH_PORT} from a previous run` };
+  } catch { /* nothing on the fresh port — good */ }
 
   const dataDir = mkdtempSync(join(tmpdir(), 'dme-seed-test-'));
   const schemaPath = join(process.cwd(), 'lib', 'db', 'desktop-schema.sql');
@@ -211,7 +215,7 @@ await t('fresh seed: random password + mustChangePassword flow', async () => {
     DAMASCUS_DESKTOP: '1',
     DAMASCUS_SCHEMA_PATH: schemaPath,
     DAMASCUS_DATA_DIR: dataDir,
-    PORT: '8082',
+    PORT: String(FRESH_PORT),
     NODE_ENV: 'development',
   };
   delete env.SEED_ADMIN_PASSWORD;
@@ -238,7 +242,7 @@ await t('fresh seed: random password + mustChangePassword flow', async () => {
   const waitHealth = async () => {
     for (let i = 0; i < 30; i += 1) {
       try {
-        const res = await fetch('http://127.0.0.1:8082/api/healthz');
+        const res = await fetch(`${FRESH}/api/healthz`);
         if (res.ok) return true;
       } catch { /* not up yet */ }
       await new Promise((r) => setTimeout(r, 500));
@@ -270,7 +274,7 @@ await t('fresh seed: random password + mustChangePassword flow', async () => {
     rmSync(dataDir, { recursive: true, force: true });
     return { error: 'seeded boot failed' };
   }
-  const c = client('http://127.0.0.1:8082');
+  const c = client(FRESH);
   const oldDefault = await c.api('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'Admin@1234' } });
   const login = await c.api('/api/auth/login', { method: 'POST', body: { username: 'admin', password: pwMatch[1] } });
   let change = { status: 0 };

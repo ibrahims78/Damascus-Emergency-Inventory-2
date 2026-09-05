@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect, type ElementType } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -17,30 +17,30 @@ import { SessionExpiryDialog } from '@/components/session-expiry-dialog';
 import { Shell } from '@/components/layout/shell';
 
 // Pages
-import NotFound from '@/pages/not-found';
-import { LoginPage } from '@/pages/login';
-import { SetupPage } from '@/pages/setup';
-import { ChangePasswordPage } from '@/pages/change-password';
-import { DashboardPage } from '@/pages/dashboard';
-import { ItemsPage } from '@/pages/items';
-import { EquipmentPage } from '@/pages/equipment';
-import { TransactionsPage } from '@/pages/transactions';
-import { ReportsPage } from '@/pages/reports';
-import { UsersPage } from '@/pages/users';
-import { SettingsPage } from '@/pages/settings';
-import { AuditPage } from '@/pages/audit';
-import { SyncPage } from '@/pages/sync';
-import { HelpPage } from '@/pages/help';
-import { PrintTransactionPage } from '@/pages/print-transaction';
-import { AdjustmentForm } from '@/pages/adjustment-form';
-import { ItemDetailsPage } from '@/pages/item-details';
-import { CustodyDetailsPage } from '@/pages/custody-details';
-import {
-  CentralReturnForm,
-  CustodyOutForm,
-  CustodyReturnForm,
-  DamageForm,
-} from '@/pages/inventory-lifecycle-forms';
+// Keep the authenticated shell small and load each page only when its route is
+// opened. This matters on field devices where the first screen is often loaded
+// over a slow or intermittent connection.
+const NotFound = lazy(() => import('@/pages/not-found'));
+const LoginPage = lazy(() => import('@/pages/login').then(({ LoginPage }) => ({ default: LoginPage })));
+const SetupPage = lazy(() => import('@/pages/setup').then(({ SetupPage }) => ({ default: SetupPage })));
+const ChangePasswordPage = lazy(() => import('@/pages/change-password').then(({ ChangePasswordPage }) => ({ default: ChangePasswordPage })));
+const DashboardPage = lazy(() => import('@/pages/dashboard').then(({ DashboardPage }) => ({ default: DashboardPage })));
+const ItemsPage = lazy(() => import('@/pages/items').then(({ ItemsPage }) => ({ default: ItemsPage })));
+const EquipmentPage = lazy(() => import('@/pages/equipment').then(({ EquipmentPage }) => ({ default: EquipmentPage })));
+const TransactionsPage = lazy(() => import('@/pages/transactions').then(({ TransactionsPage }) => ({ default: TransactionsPage })));
+const ReportsPage = lazy(() => import('@/pages/reports').then(({ ReportsPage }) => ({ default: ReportsPage })));
+const UsersPage = lazy(() => import('@/pages/users').then(({ UsersPage }) => ({ default: UsersPage })));
+const SettingsPage = lazy(() => import('@/pages/settings').then(({ SettingsPage }) => ({ default: SettingsPage })));
+const AuditPage = lazy(() => import('@/pages/audit').then(({ AuditPage }) => ({ default: AuditPage })));
+const SyncPage = lazy(() => import('@/pages/sync').then(({ SyncPage }) => ({ default: SyncPage })));
+const HelpPage = lazy(() => import('@/pages/help').then(({ HelpPage }) => ({ default: HelpPage })));
+const PrintTransactionPage = lazy(() => import('@/pages/print-transaction').then(({ PrintTransactionPage }) => ({ default: PrintTransactionPage })));
+const ItemDetailsPage = lazy(() => import('@/pages/item-details').then(({ ItemDetailsPage }) => ({ default: ItemDetailsPage })));
+const CustodyDetailsPage = lazy(() => import('@/pages/custody-details').then(({ CustodyDetailsPage }) => ({ default: CustodyDetailsPage })));
+const CustodyOutForm = lazy(() => import('@/pages/inventory-lifecycle-forms').then(({ CustodyOutForm }) => ({ default: CustodyOutForm })));
+const CustodyReturnForm = lazy(() => import('@/pages/inventory-lifecycle-forms').then(({ CustodyReturnForm }) => ({ default: CustodyReturnForm })));
+const DamageForm = lazy(() => import('@/pages/inventory-lifecycle-forms').then(({ DamageForm }) => ({ default: DamageForm })));
+const CentralReturnForm = lazy(() => import('@/pages/inventory-lifecycle-forms').then(({ CentralReturnForm }) => ({ default: CentralReturnForm })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,7 +55,7 @@ function ProtectedRoute({
   component: Component,
   adminOnly = false,
 }: {
-  component: React.ComponentType;
+  component: ElementType;
   adminOnly?: boolean;
 }) {
   const [location, setLocation] = useLocation();
@@ -178,9 +178,11 @@ function App() {
     <ThemeProvider defaultTheme="light" storageKey="damascus-ems-theme">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-            <Router />
-          </WouterRouter>
+          <Suspense fallback={<LoadingState label="جاري تحميل الصفحة..." />}>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+              <Router />
+            </WouterRouter>
+          </Suspense>
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>

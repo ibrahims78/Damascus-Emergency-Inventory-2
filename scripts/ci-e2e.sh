@@ -5,11 +5,16 @@ set -euo pipefail
 
 export DAMASCUS_DESKTOP=1
 if [ -z "${SEED_ADMIN_PASSWORD-}" ]; then
-  SEED_ADMIN_PASSWORD='***'
+  # Deliberately local-only credentials for isolated CI databases. Never reuse
+  # this value for a deployed or shared environment.
+  SEED_ADMIN_PASSWORD='LocalTest!2026Inventory'
 fi
 export SEED_ADMIN_PASSWORD
 export DAMASCUS_SCHEMA_PATH="$PWD/lib/db/desktop-schema.sql"
 API="node artifacts/api-server/dist/index.mjs"
+PORT_A="${E2E_PORT_A:-8081}"
+PORT_B="${E2E_PORT_B:-8082}"
+FRESH_PORT="${E2E_FRESH_PORT:-8083}"
 DATA_A="$(mktemp -d)"
 DATA_B="$(mktemp -d)"
 
@@ -39,9 +44,9 @@ boot_seed_boot() {
 
 (cd artifacts/api-server && node build-seed.mjs)
 
-boot_seed_boot 8080 "$DATA_A"
+boot_seed_boot "$PORT_A" "$DATA_A"
 PID_A=$!
-boot_seed_boot 8081 "$DATA_B"
+boot_seed_boot "$PORT_B" "$DATA_B"
 PID_B=$!
 
 cleanup() {
@@ -50,9 +55,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-wait_health 8080
-wait_health 8081
+wait_health "$PORT_A"
+wait_health "$PORT_B"
 
+export SYNC_A="http://127.0.0.1:${PORT_A}"
+export SYNC_B="http://127.0.0.1:${PORT_B}"
+export SECURITY_A="$SYNC_A"
+export SECURITY_B="$SYNC_B"
+export SECURITY_FRESH_PORT="$FRESH_PORT"
 node docs/tests/api-sync-tests.mjs
 node docs/tests/api-security-tests.mjs
 node docs/tests/offline-password.test.mjs
