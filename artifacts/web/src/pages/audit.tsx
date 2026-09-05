@@ -54,6 +54,8 @@ import { formatDateTime } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { downloadFile } from '@/lib/file-download';
+import { isValidIsoDate } from '@/lib/inventory-validation';
+import { CopyButton } from '@/components/copy-button';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -234,8 +236,15 @@ export function AuditPage() {
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<AuditEntry | null>(null);
+  const dateError = from && !isValidIsoDate(from)
+    ? 'تاريخ البداية غير صالح'
+    : to && !isValidIsoDate(to)
+      ? 'تاريخ النهاية غير صالح'
+      : from && to && from > to
+        ? 'يجب أن يسبق تاريخ البداية تاريخ النهاية'
+        : '';
 
-  const { data, isLoading, isError } = useQuery<AuditResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<AuditResponse>({
     queryKey: ['audit', { from, to, action, entityType, page }],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -250,6 +259,7 @@ export function AuditPage() {
       return res.json();
     },
     staleTime: 30_000,
+    enabled: !dateError,
   });
 
   const hasFilters = from || to || action !== 'all' || entityType !== 'all';
@@ -320,7 +330,7 @@ export function AuditPage() {
       toast({ description: `تم تصدير ${allEntries.length.toLocaleString('ar')} سجل بنجاح` });
     } catch (error) {
       console.error('Audit export failed:', error);
-      toast({ variant: 'destructive', description: 'تعذر إنشاء ملف CSV. حاول مرة أخرى' });
+      toast({ variant: 'destructive', description: 'تعذر إنشاء ملف Excel. حاول مرة أخرى' });
     } finally {
       setExporting(false);
     }
@@ -392,6 +402,11 @@ export function AuditPage() {
           </div>
         )}
       </div>
+      {dateError && (
+        <Alert variant="destructive">
+          <AlertDescription>{dateError}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Stats bar */}
       {data && (
@@ -424,6 +439,7 @@ export function AuditPage() {
                   <Alert variant="destructive">
                     <AlertDescription>
                       تعذر تحميل سجل التدقيق. تحقق من اتصال الخادم ثم أعد المحاولة.
+                      <div><Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void refetch()}>إعادة المحاولة</Button></div>
                     </AlertDescription>
                   </Alert>
                 </TableCell>
@@ -554,7 +570,10 @@ export function AuditPage() {
                       سجل رقم {selectedEntry.id.toLocaleString('ar-SY')}
                     </span>
                   </div>
-                  <DialogTitle>تفاصيل سجل التدقيق</DialogTitle>
+                   <div className="flex items-center justify-between gap-2">
+                     <DialogTitle>تفاصيل سجل التدقيق</DialogTitle>
+                     <CopyButton value={JSON.stringify(selectedEntry.details ?? {}, null, 2)} label="تفاصيل السجل" />
+                   </div>
                   <DialogDescription>
                     تفاصيل كاملة للعملية المسجلة — للقراءة فقط.
                   </DialogDescription>

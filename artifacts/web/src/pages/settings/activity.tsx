@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useMemo, useState, useEffect, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useGetCurrentUser, getGetCurrentUserQueryKey } from '@workspace/api-client-react';
 import {
@@ -31,6 +31,7 @@ import {
   ListChecks,
   Power,
   Wrench,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -133,7 +134,9 @@ function timeAgo(iso: string): string {
 }
 
 export function ActivityTab() {
-  const { data: entries = [], isLoading } = useQuery<AuditEntry[]>({
+  const [search, setSearch] = useState('');
+  const [actionFilter, setActionFilter] = useState('all');
+  const { data: entries = [], isLoading, isError, refetch } = useQuery<AuditEntry[]>({
     queryKey: ['my-activity'],
     queryFn: async () => {
       const res = await fetch('/api/settings/my-activity', { credentials: 'include' });
@@ -142,30 +145,57 @@ export function ActivityTab() {
     },
     refetchInterval: 30_000,
   });
+  const visibleEntries = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    return entries.filter((entry) => {
+      if (actionFilter !== 'all' && entry.action !== actionFilter) return false;
+      if (!query) return true;
+      const detail = formatActivityDetail(entry).toLocaleLowerCase();
+      return `${entry.action} ${entry.entityType} ${detail}`.includes(query);
+    });
+  }, [actionFilter, entries, search]);
 
   return (
     <div className="bg-card border rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <Activity className="h-4 w-4 text-muted-foreground" />
-            <span className="font-semibold text-sm">آخر {entries.length} نشاطًا</span>
+            <span className="font-semibold text-sm">عرض {visibleEntries.length} من آخر {entries.length} نشاطًا</span>
         </div>
-        <span className="text-xs text-muted-foreground">يتجدد تلقائياً</span>
+         <span className="text-xs text-muted-foreground">يتجدد تلقائياً</span>
       </div>
 
-      {isLoading ? (
+       <div className="grid gap-2 border-b bg-muted/10 p-4 sm:grid-cols-[1fr_12rem]">
+         <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="بحث في النشاط..." />
+         <Select value={actionFilter} onValueChange={setActionFilter}>
+           <SelectTrigger><SelectValue placeholder="نوع النشاط" /></SelectTrigger>
+           <SelectContent>
+             <SelectItem value="all">كل الأنشطة</SelectItem>
+             {Object.entries(ACT_META).map(([key, meta]) => <SelectItem key={key} value={key}>{meta.label}</SelectItem>)}
+           </SelectContent>
+         </Select>
+       </div>
+
+       {isError ? (
+         <div className="py-12 text-center">
+           <p className="text-sm text-destructive">تعذر تحميل سجل النشاط.</p>
+           <Button variant="outline" size="sm" className="mt-3 gap-2" onClick={() => void refetch()}>
+             <RefreshCw className="h-3.5 w-3.5" /> إعادة المحاولة
+           </Button>
+         </div>
+       ) : isLoading ? (
         <div className="py-12 text-center text-sm text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 opacity-40" />
           جاري التحميل...
         </div>
-      ) : entries.length === 0 ? (
+       ) : visibleEntries.length === 0 ? (
         <div className="py-12 text-center">
           <Activity className="h-8 w-8 mx-auto mb-2 opacity-20" />
-          <p className="text-sm text-muted-foreground">لا توجد نشاطات مسجّلة بعد</p>
+           <p className="text-sm text-muted-foreground">{entries.length ? 'لا توجد نتائج بهذه الفلاتر' : 'لا توجد نشاطات مسجّلة بعد'}</p>
         </div>
       ) : (
         <div className="divide-y">
-          {entries.map(entry => {
+           {visibleEntries.map(entry => {
              const meta = ACT_META[entry.action] ?? DEFAULT_ACTIVITY_META;
              const entityAr = ENTITY_AR[entry.entityType] ?? 'سجل النظام';
              const detailText = formatActivityDetail(entry);
@@ -294,11 +324,12 @@ function formatActivityValue(value: unknown): string {
 
 function formatActivityDetail(entry: AuditEntry): string {
   const details = entry.details ?? {};
+  const hiddenKeys = new Set(['nodeId', 'bytes', 'ipAddress', 'userAgent', 'stack', 'error']);
   const preferredKeys = ['name', 'itemName', 'equipmentName', 'fullName', 'username', 'message'];
   const preferred = preferredKeys
     .map(key => [key, details[key]] as const)
     .find(([, value]) => value != null && value !== '');
-  const firstDetail = Object.entries(details).find(([, value]) => value != null && value !== '');
+  const firstDetail = Object.entries(details).find(([key, value]) => !hiddenKeys.has(key) && value != null && value !== '');
   const detail = preferred ?? firstDetail;
 
   if (detail) {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useListUsers, useCreateUser, useUpdateUser, useDeleteUser, type User } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListUsersQueryKey } from '@workspace/api-client-react';
@@ -8,7 +8,6 @@ import {
   Eye,
   Warehouse,
   Pencil,
-  Trash2,
   UserCheck,
   UserX,
 } from 'lucide-react';
@@ -53,6 +52,7 @@ import { toast } from 'sonner';
 import { useGetCurrentUser } from '@workspace/api-client-react';
 import { useLocation } from 'wouter';
 import { formatDate } from '@/lib/utils';
+import { validateUsername } from '@/lib/user-validation';
 
 type Role = 'admin' | 'warehouse_manager' | 'viewer';
 
@@ -108,17 +108,18 @@ export function UsersPage() {
   const { data: currentUser } = useGetCurrentUser();
 
   // Redirect non-admins
-  if (currentUser && currentUser.role !== 'admin') {
-    setLocation('/');
-    return null;
-  }
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin') setLocation('/');
+  }, [currentUser, setLocation]);
+
+  if (currentUser && currentUser.role !== 'admin') return null;
 
   return <UsersList currentUserId={currentUser?.id} />;
 }
 
 function UsersList({ currentUserId }: { currentUserId?: number }) {
   const queryClient = useQueryClient();
-  const { data: users = [], isLoading } = useListUsers();
+  const { data: users = [], isLoading, isError, refetch } = useListUsers();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -135,7 +136,7 @@ function UsersList({ currentUserId }: { currentUserId?: number }) {
       },
       onError: (err: unknown) => {
         const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-        if (msg?.includes('unique') || msg?.includes('Username already exists')) {
+        if (msg?.includes('unique') || msg?.includes('Username already exists') || msg?.includes('موجود')) {
           setFormErrors((e) => ({ ...e, username: 'اسم المستخدم موجود مسبقاً' }));
         } else {
           toast.error('حدث خطأ أثناء الإضافة');
@@ -202,6 +203,10 @@ function UsersList({ currentUserId }: { currentUserId?: number }) {
     const errs: Partial<Record<keyof UserFormState, string>> = {};
     if (!form.fullName.trim()) errs.fullName = 'الاسم الكامل مطلوب';
     if (!editingUser && !form.username.trim()) errs.username = 'اسم المستخدم مطلوب';
+    if (!editingUser && !errs.username) {
+      const usernameError = validateUsername(form.username);
+      if (usernameError) errs.username = usernameError;
+    }
     if (!editingUser && !form.password.trim()) errs.password = 'كلمة المرور مطلوبة';
     if (
       form.password &&
@@ -279,6 +284,13 @@ function UsersList({ currentUserId }: { currentUserId?: number }) {
                     </div>
                   </TableCell>
                 </TableRow>
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-12 text-center">
+                    <p className="text-sm text-destructive">تعذر تحميل المستخدمين. حاول مرة أخرى.</p>
+                    <Button variant="outline" size="sm" className="mt-3" onClick={() => void refetch()}>إعادة المحاولة</Button>
+                  </TableCell>
+                </TableRow>
               ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
@@ -327,7 +339,7 @@ function UsersList({ currentUserId }: { currentUserId?: number }) {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => toggleActive(user)}
+                              onClick={() => user.isActive ? setDeleteTarget(user) : toggleActive(user)}
                               title={user.isActive ? 'تعطيل الحساب' : 'تفعيل الحساب'}
                             >
                               {user.isActive ? (
@@ -335,16 +347,6 @@ function UsersList({ currentUserId }: { currentUserId?: number }) {
                               ) : (
                                 <UserCheck className="h-4 w-4 text-success" />
                               )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => setDeleteTarget(user)}
-                              title="حذف"
-                              disabled={!user.isActive}
-                            >
-                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </>
                         )}
@@ -486,9 +488,9 @@ function UsersList({ currentUserId }: { currentUserId?: number }) {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+            <AlertDialogTitle>تأكيد تعطيل الحساب</AlertDialogTitle>
             <AlertDialogDescription>
-              هل تريد حذف المستخدم <strong>{deleteTarget?.fullName}</strong>؟ سيتم تعطيل الحساب ولن يتمكن من تسجيل الدخول.
+              هل تريد تعطيل حساب <strong>{deleteTarget?.fullName}</strong>؟ سيتم إيقاف تسجيل الدخول فقط، ولن يُحذف سجل المستخدم أو عملياته.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -498,7 +500,7 @@ function UsersList({ currentUserId }: { currentUserId?: number }) {
               onClick={() => deleteTarget && deleteUser.mutate({ id: deleteTarget.id })}
               disabled={deleteUser.isPending}
             >
-              {deleteUser.isPending ? 'جاري الحذف...' : 'تأكيد الحذف'}
+              {deleteUser.isPending ? 'جاري التعطيل...' : 'تأكيد التعطيل'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

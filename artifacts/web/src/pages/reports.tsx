@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDateTime, formatDate } from '@/lib/utils';
+import { isValidIsoDate } from '@/lib/inventory-validation';
 import { toast } from '@/hooks/use-toast';
 import logoUrl from '@assets/logo.jpeg';
 import { Capacitor } from '@capacitor/core';
@@ -211,12 +212,17 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-function ReportErrorState() {
+function ReportErrorState({ onRetry }: { onRetry?: () => void }) {
   return (
     <TableRow>
       <TableCell colSpan={99} className="p-4">
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-center text-sm text-destructive">
-          تعذر تحميل بيانات التقرير. تحقق من اتصال الخادم ثم أعد المحاولة.
+          <div>تعذر تحميل بيانات التقرير. تحقق من اتصال الخادم ثم أعد المحاولة.</div>
+          {onRetry && (
+            <Button type="button" variant="outline" size="sm" className="mt-3 gap-2" onClick={onRetry}>
+              <RotateCcw className="h-3.5 w-3.5" />إعادة المحاولة
+            </Button>
+          )}
         </div>
       </TableCell>
     </TableRow>
@@ -267,7 +273,7 @@ function transactionTypeLabel(type: string) {
 // ─── tab 1: stock ───────────────────────────────────────────────────────────
 
 function StockTab() {
-  const { data, isLoading } = useGetStockReport();
+  const { data, isLoading, isError, refetch } = useGetStockReport();
   const { data: settings } = useQuery({
     queryKey: ['settings', 'reports'],
     queryFn: fetchReportSettings,
@@ -339,7 +345,9 @@ function StockTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {isError ? (
+              <ReportErrorState onRetry={() => void refetch()} />
+            ) : isLoading ? (
               <TableRow><TableCell colSpan={9} className="h-32 text-center text-muted-foreground">جاري التحميل...</TableCell></TableRow>
             ) : items.length === 0 ? (
               <EmptyState message="لا توجد مواد مسجّلة بعد" />
@@ -387,15 +395,34 @@ function StockTab() {
 // ─── tab 2: movements ───────────────────────────────────────────────────────
 
 function MovementsTab() {
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [type, setType] = useState<'all' | 'in' | 'out'>('all');
+  const initialParams = new URLSearchParams(window.location.search);
+  const [from, setFrom] = useState(initialParams.get('from') ?? '');
+  const [to, setTo] = useState(initialParams.get('to') ?? '');
+  const [type, setType] = useState<'all' | 'in' | 'out'>(
+    (initialParams.get('movementType') as 'all' | 'in' | 'out') || 'all',
+  );
+  const dateError = from && !isValidIsoDate(from)
+    ? 'تاريخ البداية غير صالح'
+    : to && !isValidIsoDate(to)
+      ? 'تاريخ النهاية غير صالح'
+      : from && to && from > to
+        ? 'يجب أن يسبق تاريخ البداية تاريخ النهاية'
+        : '';
 
-  const { data, isLoading } = useGetMovementsReport({
-    from: from || undefined,
-    to: to || undefined,
-    type: type === 'all' ? undefined : type,
-  });
+  const { data, isLoading, isError, refetch } = useGetMovementsReport(
+    {
+      from: from || undefined,
+      to: to || undefined,
+      type: type === 'all' ? undefined : type,
+    },
+  );
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (from) params.set('from', from); else params.delete('from');
+    if (to) params.set('to', to); else params.delete('to');
+    if (type !== 'all') params.set('movementType', type); else params.delete('movementType');
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  }, [from, to, type]);
   const txs = data ?? [];
 
   const countIn = txs.filter((t) => t.type === 'in').length;
@@ -458,6 +485,7 @@ function MovementsTab() {
             )}
           </div>
         </div>
+        {dateError && <p className="mt-3 text-sm text-destructive">{dateError}</p>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 print:grid">
@@ -495,7 +523,11 @@ function MovementsTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {dateError ? (
+              <TableRow><TableCell colSpan={9} className="h-32 text-center text-destructive">{dateError}</TableCell></TableRow>
+            ) : isError ? (
+              <ReportErrorState onRetry={() => void refetch()} />
+            ) : isLoading ? (
               <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">جاري التحميل...</TableCell></TableRow>
             ) : txs.length === 0 ? (
               <EmptyState message={hasFilters ? 'لا توجد عمليات بهذه الفلاتر' : 'لا توجد عمليات مسجّلة بعد'} />
@@ -541,7 +573,7 @@ function MovementsTab() {
 // ─── tab 3: expiry ──────────────────────────────────────────────────────────
 
 function ExpiryTab() {
-  const { data, isLoading } = useGetExpiryReport();
+  const { data, isLoading, isError, refetch } = useGetExpiryReport();
   const items = data ?? [];
 
   const expired = items.filter(
@@ -593,7 +625,9 @@ function ExpiryTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {isError ? (
+              <ReportErrorState onRetry={() => void refetch()} />
+            ) : isLoading ? (
               <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">جاري التحميل...</TableCell></TableRow>
             ) : items.length === 0 ? (
               <EmptyState message="✅ لا توجد أصناف قريبة من انتهاء الصلاحية" />
@@ -637,7 +671,7 @@ function ExpiryTab() {
 
 function BelowMinTab() {
   const [, setLocation] = useLocation();
-  const { data, isLoading } = useGetBelowMinReport();
+  const { data, isLoading, isError, refetch } = useGetBelowMinReport();
   const items = data ?? [];
 
   const critical = items.filter((i) => i.currentStock === 0).length;
@@ -687,7 +721,9 @@ function BelowMinTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {isError ? (
+              <ReportErrorState onRetry={() => void refetch()} />
+            ) : isLoading ? (
               <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">جاري التحميل...</TableCell></TableRow>
             ) : items.length === 0 ? (
               <EmptyState message="✅ جميع الأصناف فوق الحد الأدنى" />
@@ -734,7 +770,7 @@ function BelowMinTab() {
 // ─── tab 5: equipment ───────────────────────────────────────────────────────
 
 function EquipmentTab() {
-  const { data, isLoading } = useGetEquipmentReport();
+  const { data, isLoading, isError, refetch } = useGetEquipmentReport();
   const equipment = data ?? [];
 
   const countByCondition = equipment.reduce<Record<string, number>>((acc, e) => {
@@ -791,7 +827,9 @@ function EquipmentTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {isError ? (
+              <ReportErrorState onRetry={() => void refetch()} />
+            ) : isLoading ? (
               <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">جاري التحميل...</TableCell></TableRow>
             ) : equipment.length === 0 ? (
               <EmptyState message="لا توجد تجهيزات مسجّلة بعد" />
@@ -824,7 +862,7 @@ function EquipmentTab() {
 // ─── tab 6: reconciled stock position ───────────────────────────────────────
 
 function StockPositionTab() {
-  const { data, isLoading } = useGetStockPositionReport();
+  const { data, isLoading, isError, refetch } = useGetStockPositionReport();
   const items = data?.items ?? [];
   const equipment = data?.equipment ?? [];
   const totalAvailable =
@@ -896,7 +934,9 @@ function StockPositionTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isError ? (
+                <ReportErrorState onRetry={() => void refetch()} />
+              ) : isLoading ? (
                 <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">جاري التحميل...</TableCell></TableRow>
               ) : items.length === 0 ? (
                 <EmptyState message="لا توجد مواد مسجّلة بعد" />
@@ -959,7 +999,7 @@ function CustodiesTab() {
   const [status, setStatus] = useState<'all' | 'open' | 'partially_returned' | 'damaged'>('all');
   const [search, setSearch] = useState('');
   const [overdueDays, setOverdueDays] = useState('30');
-  const { data, isLoading, isError } = useGetCustodiesReport({
+  const { data, isLoading, isError, refetch } = useGetCustodiesReport({
     status: status === 'all' ? undefined : status,
     search: search || undefined,
     overdueDays: Number(overdueDays) || 30,
@@ -1041,7 +1081,7 @@ function CustodiesTab() {
           </TableHeader>
           <TableBody>
             {isError ? (
-              <ReportErrorState />
+              <ReportErrorState onRetry={() => void refetch()} />
             ) : isLoading ? (
               <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">جاري التحميل...</TableCell></TableRow>
             ) : records.length === 0 ? (
@@ -1107,6 +1147,11 @@ export function ReportsPage() {
     const tab = getInitialTab();
     setActiveTab(tab);
   }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', activeTab);
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+  }, [activeTab]);
 
   return (
     <div className="print-report space-y-6">

@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middlewares/auth";
 import { auditLog } from "../middlewares/audit";
 import { eq } from "drizzle-orm";
 import { getPasswordPolicyError } from "../lib/password-policy";
+import { getUsernamePolicyError } from "../lib/username-policy";
 
 const router = Router();
 
@@ -37,6 +38,12 @@ router.post("/", requireAuth, requireRole("admin"), async (req, res) => {
       res.status(400).json({ error: "username, password, fullName, and role are required" });
       return;
     }
+    const normalizedUsername = String(username).trim();
+    const usernameError = getUsernamePolicyError(normalizedUsername);
+    if (usernameError) {
+      res.status(400).json({ error: usernameError });
+      return;
+    }
     const passwordError = getPasswordPolicyError(password);
     if (passwordError) {
       res.status(400).json({ error: passwordError });
@@ -50,7 +57,7 @@ router.post("/", requireAuth, requireRole("admin"), async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(usersTable)
-      .values({ username, passwordHash, fullName, role })
+      .values({ username: normalizedUsername, passwordHash, fullName: String(fullName).trim(), role })
       .returning({
         id: usersTable.id,
         username: usersTable.username,
@@ -80,8 +87,16 @@ router.put("/:id", requireAuth, requireRole("admin"), async (req, res) => {
     const id = parseInt(String(req.params.id), 10);
     if (isNaN(id)) { res.status(400).json({ error: "Invalid user id" }); return; }
     const { fullName, role, password, isActive } = req.body;
+    if (res.locals.user.id === id && isActive === false) {
+      res.status(400).json({ error: "لا يمكن تعطيل حسابك الحالي" });
+      return;
+    }
+    if (res.locals.user.id === id && role !== undefined && role !== res.locals.user.role) {
+      res.status(400).json({ error: "لا يمكن تغيير دور حسابك الحالي" });
+      return;
+    }
     const updates: Partial<typeof usersTable.$inferInsert> = {};
-    if (fullName !== undefined) updates.fullName = fullName;
+    if (fullName !== undefined) updates.fullName = String(fullName).trim();
     if (role !== undefined) {
       if (!["admin", "warehouse_manager", "viewer"].includes(role)) {
         res.status(400).json({ error: "Invalid role" }); return;

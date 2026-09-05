@@ -16,6 +16,18 @@ import { eq, and, lte, gte, sql, desc } from "drizzle-orm";
 
 const router = Router();
 
+function parseDateFilter(value: string | undefined, label: string, endOfDay = false): Date | null {
+  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${label} must be an ISO date`);
+  }
+  const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    throw new Error(`${label} must be a valid date`);
+  }
+  return date;
+}
+
 // GET /api/reports/stock
 router.get("/stock", requireAuth, async (_req, res) => {
   try {
@@ -51,12 +63,21 @@ router.get("/movements", requireAuth, async (req, res) => {
   try {
     const { from, to, type, recipient, search } = req.query as Record<string, string>;
     const conditions = [];
-    if (from) conditions.push(gte(transactionsTable.createdAt, new Date(from)));
-    if (to) {
-      const toDate = new Date(to);
-      toDate.setHours(23, 59, 59, 999);
-      conditions.push(lte(transactionsTable.createdAt, toDate));
+    let fromDate: Date | null;
+    let toDate: Date | null;
+    try {
+      fromDate = parseDateFilter(from, "from");
+      toDate = parseDateFilter(to, "to", true);
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Invalid date filter" });
+      return;
     }
+    if (fromDate && toDate && fromDate > toDate) {
+      res.status(400).json({ error: "from must be before to" });
+      return;
+    }
+    if (fromDate) conditions.push(gte(transactionsTable.createdAt, fromDate));
+    if (toDate) conditions.push(lte(transactionsTable.createdAt, toDate));
     if (type) conditions.push(eq(transactionsTable.type, type as never));
     if (recipient) conditions.push(sql`${transactionsTable.recipientNameSnap} ILIKE ${`%${recipient}%`}`);
     if (search) {

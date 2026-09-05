@@ -5,6 +5,16 @@ import { and, desc, gte, lte, eq, sql } from "drizzle-orm";
 
 const router = Router();
 
+function parseDateFilter(value: string | undefined, label: string, endOfDay = false): Date | null {
+  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${label} must be an ISO date`);
+  const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    throw new Error(`${label} must be a valid date`);
+  }
+  return date;
+}
+
 // GET /api/audit — admin only, paginated audit log with optional filters
 router.get("/", requireAuth, requireRole("admin"), async (req, res) => {
   try {
@@ -23,13 +33,29 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res) => {
     const offset = (pageNum - 1) * limitNum;
 
     const conditions = [];
-    if (from) conditions.push(gte(auditLogTable.createdAt, new Date(from)));
-    if (to) {
-      const toDate = new Date(to);
-      toDate.setHours(23, 59, 59, 999);
-      conditions.push(lte(auditLogTable.createdAt, toDate));
+    let fromDate: Date | null;
+    let toDate: Date | null;
+    try {
+      fromDate = parseDateFilter(from, "from");
+      toDate = parseDateFilter(to, "to", true);
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Invalid date filter" });
+      return;
     }
-    if (userId) conditions.push(eq(auditLogTable.userId, parseInt(userId)));
+    if (fromDate && toDate && fromDate > toDate) {
+      res.status(400).json({ error: "from must be before to" });
+      return;
+    }
+    if (fromDate) conditions.push(gte(auditLogTable.createdAt, fromDate));
+    if (toDate) conditions.push(lte(auditLogTable.createdAt, toDate));
+    if (userId) {
+      const parsedUserId = parseInt(userId);
+      if (!Number.isInteger(parsedUserId) || parsedUserId < 1) {
+        res.status(400).json({ error: "userId must be a positive integer" });
+        return;
+      }
+      conditions.push(eq(auditLogTable.userId, parsedUserId));
+    }
     if (action) conditions.push(eq(auditLogTable.action, action));
     if (entityType) conditions.push(eq(auditLogTable.entityType, entityType));
 
