@@ -30,6 +30,7 @@ import {
   ChevronRight,
   Filter,
   Activity,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +62,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -72,6 +81,8 @@ import { ItemForm } from './item-form';
 import { AdjustmentForm } from './adjustment-form';
 import { ItemDetailsPage } from './item-details';
 import { downloadFile } from '@/lib/file-download';
+import { ConnectionErrorState } from '@/components/app-state';
+import { CopyButton } from '@/components/copy-button';
 
 /* ──────────────────────────── Page router ───────────────────────────────── */
 
@@ -246,6 +257,17 @@ function BulkImportDialog({
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const extension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+    if (!['.xlsx', '.xls'].includes(extension)) {
+      setStatus('error');
+      setErrorMsg('صيغة الملف غير مدعومة. اختر ملف Excel بامتداد .xlsx أو .xls.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setStatus('error');
+      setErrorMsg('حجم الملف أكبر من الحد المسموح (10 ميغابايت).');
+      return;
+    }
     setStatus('parsing');
     setResult(null);
     setErrorMsg('');
@@ -303,23 +325,16 @@ function BulkImportDialog({
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-card border rounded-lg shadow-xl w-full max-w-lg mx-4 p-6 space-y-4" dir="rtl">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-lg font-bold flex items-center gap-2">
+    <Dialog open={open} onOpenChange={(value) => !value && handleClose()}>
+      <DialogContent className="sm:max-w-lg" dir="rtl">
+        <DialogHeader className="text-right">
+          <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
               استيراد مواد من Excel
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1">يُقبل الملف بصيغة .xlsx أو .xls — الصف الأول رؤوس الأعمدة</p>
-          </div>
-          <button onClick={handleClose} className="text-muted-foreground hover:text-foreground p-1">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+          </DialogTitle>
+          <DialogDescription>يُقبل الملف بصيغة .xlsx أو .xls، والصف الأول مخصص لرؤوس الأعمدة. الحد الأقصى 10 ميغابايت.</DialogDescription>
+        </DialogHeader>
 
         {/* Format hint */}
         <div className="rounded-md bg-muted/50 border p-3 text-xs space-y-1">
@@ -357,7 +372,7 @@ function BulkImportDialog({
         )}
 
         {status === 'error' && (
-          <div className="rounded-md bg-destructive/10 border border-destructive/20 p-4 text-sm text-destructive">
+          <div className="rounded-md bg-destructive/10 border border-destructive/20 p-4 text-sm text-destructive" role="alert">
             {errorMsg}
           </div>
         )}
@@ -385,16 +400,16 @@ function BulkImportDialog({
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-2">
+        <DialogFooter className="gap-2">
           {status === 'error' && (
-            <button onClick={reset} className="text-sm text-primary underline">إعادة المحاولة</button>
+            <Button variant="link" size="sm" onClick={reset}>إعادة المحاولة</Button>
           )}
           <Button variant="outline" size="sm" onClick={handleClose}>
             {status === 'done' ? 'إغلاق' : 'إلغاء'}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -441,7 +456,7 @@ function ItemsList() {
   };
 
   /* Paginated + filtered list */
-  const { data, isLoading } = useQuery<{ items: Item[]; total: number; page: number; limit: number }>({
+  const { data, isLoading, isError, refetch } = useQuery<{ items: Item[]; total: number; page: number; limit: number }>({
     queryKey: ['items', { search: debouncedSearch, categoryId, belowMin, nearExpiry, page, sortBy, sortDir }],
     queryFn: async () => {
       const p = new URLSearchParams();
@@ -687,12 +702,18 @@ function ItemsList() {
             </div>
           </div>
 
-          {/* Table */}
+          {isError && items.length === 0 ? (
+            <ConnectionErrorState
+              title="تعذر تحميل المواد"
+              description="تعذر الوصول إلى قائمة المواد. يمكنك إعادة المحاولة دون فقدان الفلاتر الحالية."
+              onRetry={() => void refetch()}
+            />
+          ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[110px]">الرمز</TableHead>
+                  <TableHead className="w-[130px]">الرمز</TableHead>
                   <SortableHead label="اسم المادة" col="name" current={sortBy} dir={sortDir} onSort={handleSort} />
                   <TableHead>التصنيف</TableHead>
                   <SortableHead label="الرصيد" col="currentStock" current={sortBy} dir={sortDir} onSort={handleSort} className="text-center w-[110px]" />
@@ -760,8 +781,13 @@ function ItemsList() {
                     return (
                       <TableRow key={item.id} className={cn('group', rowBg)}>
                         {/* Code */}
-                        <TableCell className="font-mono text-xs text-muted-foreground">
-                          {item.code || <span className="opacity-40">—</span>}
+                         <TableCell className="font-mono text-xs text-muted-foreground">
+                           {item.code ? (
+                             <span className="inline-flex items-center gap-1">
+                               <span>{item.code}</span>
+                               <CopyButton value={item.code} label="رمز المادة" className="h-7 w-7" />
+                             </span>
+                           ) : <span className="opacity-40">—</span>}
                         </TableCell>
 
                         {/* Name */}
@@ -844,10 +870,24 @@ function ItemsList() {
                           </div>
                         </TableCell>
 
-                        {/* Actions — inline hover */}
+                         {/* Actions remain visible on touch devices; hover only reduces desktop density. */}
                         {canEdit && (
                           <TableCell>
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                               <Tooltip>
+                                 <TooltipTrigger asChild>
+                                   <Button
+                                     variant="ghost"
+                                     size="icon"
+                                     className="h-8 w-8 text-primary"
+                                     aria-label={`عرض تفاصيل ${item.name}`}
+                                     onClick={() => setLocation(`/items/${item.id}`)}
+                                   >
+                                     <Eye className="h-3.5 w-3.5" />
+                                   </Button>
+                                 </TooltipTrigger>
+                                 <TooltipContent>تفاصيل المادة</TooltipContent>
+                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -904,6 +944,7 @@ function ItemsList() {
               </TableBody>
             </Table>
           </div>
+          )}
 
           {/* Pagination */}
           {!isLoading && totalPages > 1 && (

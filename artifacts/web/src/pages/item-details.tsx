@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Search,
   Wrench,
+  AlertCircle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { CopyButton } from '@/components/copy-button';
 
 type MovementType =
   | 'in'
@@ -126,6 +128,9 @@ export function ItemDetailsPage({ itemId: providedItemId }: { itemId?: number } 
   const [data, setData] = useState<ItemHistoryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const dateRangeError = from && to && from > to
+    ? 'تاريخ البداية يجب أن يكون قبل تاريخ النهاية أو مساوياً له'
+    : '';
 
   useEffect(() => {
     setPage(1);
@@ -139,6 +144,11 @@ export function ItemDetailsPage({ itemId: providedItemId }: { itemId?: number } 
     }
 
     const controller = new AbortController();
+    if (from && to && from > to) {
+      setIsLoading(false);
+      setError('');
+      return;
+    }
     const params = new URLSearchParams({
       page: String(page),
       limit: '20',
@@ -211,9 +221,16 @@ export function ItemDetailsPage({ itemId: providedItemId }: { itemId?: number } 
             <div className="rounded-xl bg-primary/10 p-3 text-primary"><Package className="h-6 w-6" /></div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">{item.name}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                بطاقة المادة {item.code ? `· ${item.code}` : ''} · سجل زمني من الأقدم إلى الأحدث
-              </p>
+               <div className="mt-1 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+                 <span>بطاقة المادة</span>
+                 {item.code && (
+                   <span className="inline-flex items-center gap-1 font-mono" dir="ltr">
+                     · {item.code}
+                     <CopyButton value={item.code} label="رمز المادة" className="h-7 w-7 text-foreground" />
+                   </span>
+                 )}
+                 <span>· سجل زمني من الأقدم إلى الأحدث</span>
+               </div>
             </div>
           </div>
         </div>
@@ -267,6 +284,12 @@ export function ItemDetailsPage({ itemId: providedItemId }: { itemId?: number } 
             <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} aria-label="من تاريخ" />
             <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} aria-label="إلى تاريخ" />
           </div>
+          {dateRangeError && (
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {dateRangeError}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y">
@@ -277,13 +300,19 @@ export function ItemDetailsPage({ itemId: providedItemId }: { itemId?: number } 
                 <div className="flex items-center gap-2 sm:pt-1">{movementBadge(movement.type)}<span className="text-xs tabular-nums text-muted-foreground">{dateOnly(movement.documentDate)}</span></div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="font-semibold">{movement.documentNumber}</span>
+                     <span className="inline-flex items-center gap-1 font-semibold">
+                       {movement.documentNumber}
+                       <CopyButton value={movement.documentNumber} label="رقم السند" className="h-7 w-7" />
+                     </span>
                     {movement.isHistoricalIncomplete && <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[10px] text-amber-700">سجل تاريخي ناقص الحقول</Badge>}
                   </div>
                   <div className="mt-1 grid gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
                     <span>المنفذ: {movement.operatorName || 'غير متوفر'}</span>
                     <span>الجهة: {movement.partyName || 'غير محددة'}</span>
-                    <span>الدفعة: {movement.batchNumber || 'غير متوفر'}</span>
+                     <span className="inline-flex items-center gap-1">
+                       الدفعة: {movement.batchNumber || 'غير متوفر'}
+                       {movement.batchNumber && <CopyButton value={movement.batchNumber} label="رقم الدفعة" className="h-7 w-7" />}
+                     </span>
                     <span>الصلاحية: {dateOnly(movement.expiryDate)}</span>
                   </div>
                   {movement.allocations.length > 1 && <p className="mt-2 text-xs text-primary">تخصيص FEFO: {movement.allocations.map((allocation) => `${allocation.batchNumber || 'بلا رقم'} (${allocation.quantity})`).join('، ')}</p>}
@@ -311,10 +340,10 @@ export function ItemDetailsPage({ itemId: providedItemId }: { itemId?: number } 
       <Card className="print:hidden">
         <CardHeader><CardTitle className="text-base">الدفعات والصلاحيات</CardTitle><CardDescription>الرصيد المفصل لكل دفعة كما هو محفوظ في سجل FEFO.</CardDescription></CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+           <div className="overflow-x-auto rounded-md border">
             <table className="w-full min-w-[620px] text-sm">
               <thead><tr className="border-b text-right text-xs text-muted-foreground"><th className="pb-3 font-medium">الدفعة</th><th className="pb-3 font-medium">الوارد</th><th className="pb-3 font-medium">المتبقي</th><th className="pb-3 font-medium">الصلاحية</th><th className="pb-3 font-medium">مذكرة الإدخال</th></tr></thead>
-              <tbody className="divide-y">{data.batches.map((batch) => <tr key={batch.id}><td className="py-3 font-medium">{batch.batchNumber || 'بلا رقم'}</td><td className="py-3 tabular-nums">{formatNumber(batch.receivedQuantity)}</td><td className="py-3 tabular-nums">{formatNumber(batch.remainingQuantity)}</td><td className="py-3">{dateOnly(batch.expiryDate)}</td><td className="py-3">{batch.deliveryNoteNumber || '—'}{batch.deliveryNoteDate ? ` · ${dateOnly(batch.deliveryNoteDate)}` : ''}</td></tr>)}</tbody>
+             <tbody className="divide-y">{data.batches.map((batch) => <tr key={batch.id}><td className="py-3 font-medium"><span className="inline-flex items-center gap-1">{batch.batchNumber || 'بلا رقم'}{batch.batchNumber && <CopyButton value={batch.batchNumber} label="رقم الدفعة" className="h-7 w-7" />}</span></td><td className="py-3 tabular-nums">{formatNumber(batch.receivedQuantity)}</td><td className="py-3 tabular-nums">{formatNumber(batch.remainingQuantity)}</td><td className="py-3">{dateOnly(batch.expiryDate)}</td><td className="py-3"><span className="inline-flex items-center gap-1">{batch.deliveryNoteNumber || '—'}{batch.deliveryNoteNumber && <CopyButton value={batch.deliveryNoteNumber} label="رقم مذكرة الإدخال" className="h-7 w-7" />}{batch.deliveryNoteDate ? ` · ${dateOnly(batch.deliveryNoteDate)}` : ''}</span></td></tr>)}</tbody>
             </table>
           </div>
         </CardContent>

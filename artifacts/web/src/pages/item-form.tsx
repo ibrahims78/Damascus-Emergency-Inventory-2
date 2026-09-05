@@ -11,11 +11,12 @@ import {
   useListCategories,
   type Category,
 } from '@workspace/api-client-react';
-import { ArrowRight, Save, Plus } from 'lucide-react';
+import { ArrowRight, Save, Plus, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
   Form, 
   FormControl, 
@@ -40,19 +41,20 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { getApiErrorMessage, isValidIsoDate } from '@/lib/item-validation';
 
 const itemSchema = z.object({
-  name: z.string().min(2, 'الاسم مطلوب ويجب أن يكون حرفين على الأقل'),
-  code: z.string().optional().nullable(),
-  categoryId: z.coerce.number().optional().nullable(),
+  name: z.string().trim().min(2, 'الاسم مطلوب ويجب أن يكون حرفين على الأقل'),
+  code: z.string().trim().optional().nullable(),
+  categoryId: z.coerce.number().int('التصنيف غير صالح').positive('التصنيف غير صالح').optional().nullable(),
   itemType: z.string().default('item'),
-  unit: z.string().min(1, 'الوحدة مطلوبة (مثال: حبة، علبة، الخ)'),
-  initialStock: z.coerce.number().min(0).default(0),
-  minStock: z.coerce.number().min(0).default(0),
-  expiryDate: z.string().optional().nullable(),
-  batchNumber: z.string().optional().nullable(),
-  location: z.string().optional().nullable(),
-  supplier: z.string().optional().nullable(),
+  unit: z.string().trim().min(1, 'الوحدة مطلوبة (مثال: حبة، علبة، إلخ)'),
+  initialStock: z.coerce.number().int('الكمية يجب أن تكون عدداً صحيحاً').min(0, 'لا يمكن أن تكون الكمية سالبة').default(0),
+  minStock: z.coerce.number().int('الحد الأدنى يجب أن يكون عدداً صحيحاً').min(0, 'لا يمكن أن يكون الحد الأدنى سالباً').default(0),
+  expiryDate: z.string().optional().nullable().refine((value) => !value || isValidIsoDate(value), 'تاريخ الصلاحية غير صالح'),
+  batchNumber: z.string().trim().optional().nullable(),
+  location: z.string().trim().optional().nullable(),
+  supplier: z.string().trim().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
@@ -96,6 +98,8 @@ export function ItemForm({ itemId }: { itemId?: number }) {
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatType, setNewCatType] = useState<'consumable' | 'equipment'>('consumable');
+  const [catError, setCatError] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   // ── Units from settings ──
   const [showCustomUnit, setShowCustomUnit] = useState(false);
@@ -151,9 +155,14 @@ export function ItemForm({ itemId }: { itemId?: number }) {
       form.setValue('categoryId', created.id);
       setCatDialogOpen(false);
       setNewCatName('');
+      setCatError('');
       toast.success(`تم إضافة تصنيف "${created.name}" بنجاح`);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      const message = getApiErrorMessage(err, 'تعذر إضافة التصنيف');
+      setCatError(message);
+      toast.error(message);
+    },
   });
 
   const form = useForm<ItemFormValues>({
@@ -193,12 +202,24 @@ export function ItemForm({ itemId }: { itemId?: number }) {
   }, [item, isEditing, form]);
 
   const onSubmit = (data: ItemFormValues) => {
+    setSubmitError('');
+    const normalizedData = {
+      ...data,
+      name: data.name.trim(),
+      code: data.code?.trim() || null,
+      unit: data.unit.trim(),
+      batchNumber: data.batchNumber?.trim() || null,
+      location: data.location?.trim() || null,
+      supplier: data.supplier?.trim() || null,
+      notes: data.notes?.trim() || null,
+      categoryId: data.categoryId || null,
+    };
+
     if (isEditing) {
       updateMutation.mutate({ 
         id: itemId!, 
         data: {
-          ...data,
-          categoryId: data.categoryId || null,
+          ...normalizedData,
         } 
       }, {
         onSuccess: () => {
@@ -206,14 +227,17 @@ export function ItemForm({ itemId }: { itemId?: number }) {
           toast.success("تم تعديل المادة بنجاح");
           setLocation('/items');
         },
-        onError: () => toast.error("حدث خطأ أثناء حفظ المادة"),
+        onError: (error) => {
+          const message = getApiErrorMessage(error, 'حدث خطأ أثناء حفظ المادة');
+          setSubmitError(message);
+          toast.error(message);
+        },
       });
     } else {
       createMutation.mutate({ 
         data: {
-          ...data,
-          currentStock: data.initialStock ?? 0,
-          categoryId: data.categoryId || null,
+          ...normalizedData,
+          currentStock: normalizedData.initialStock ?? 0,
         } 
       }, {
         onSuccess: () => {
@@ -221,7 +245,11 @@ export function ItemForm({ itemId }: { itemId?: number }) {
           toast.success("تمت إضافة المادة بنجاح");
           setLocation('/items');
         },
-        onError: () => toast.error("حدث خطأ أثناء إضافة المادة"),
+        onError: (error) => {
+          const message = getApiErrorMessage(error, 'حدث خطأ أثناء إضافة المادة');
+          setSubmitError(message);
+          toast.error(message);
+        },
       });
     }
   };
@@ -236,18 +264,28 @@ export function ItemForm({ itemId }: { itemId?: number }) {
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setLocation('/items')}>
+          <Button variant="ghost" size="icon" aria-label="العودة إلى المواد" onClick={() => setLocation('/items')}>
             <ArrowRight className="h-5 w-5" />
           </Button>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {isEditing ? 'تعديل مادة' : 'إضافة مادة جديدة'}
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {isEditing ? 'تعديل مادة' : 'إضافة مادة جديدة'}
+            </h1>
+            <p className="text-sm text-muted-foreground">أدخل بيانات المادة كما تظهر في المخزون والدفعات.</p>
+          </div>
         </div>
       </div>
 
       <div className="bg-card border rounded-lg shadow-sm p-6">
+        {submitError && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>تعذر حفظ المادة</AlertTitle>
+            <AlertDescription>{submitError}</AlertDescription>
+          </Alert>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             
@@ -314,7 +352,8 @@ export function ItemForm({ itemId }: { itemId?: number }) {
                         variant="outline"
                         size="icon"
                         title="إضافة تصنيف جديد"
-                        onClick={() => setCatDialogOpen(true)}
+                         aria-label="إضافة تصنيف جديد"
+                         onClick={() => { setCatError(''); setCatDialogOpen(true); }}
                         className="flex-shrink-0"
                       >
                         <Plus className="h-4 w-4" />
@@ -399,7 +438,7 @@ export function ItemForm({ itemId }: { itemId?: number }) {
                     <FormItem>
                       <FormLabel>الكمية الحالية (الرصيد الافتتاحي)</FormLabel>
                       <FormControl>
-                        <Input type="number" min={0} {...field} />
+                        <Input type="number" min={0} step={1} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -414,7 +453,7 @@ export function ItemForm({ itemId }: { itemId?: number }) {
                   <FormItem>
                     <FormLabel>حد النواقص (الحد الأدنى)</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                       <Input type="number" min={0} step={1} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -522,11 +561,13 @@ export function ItemForm({ itemId }: { itemId?: number }) {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    if (newCatName.trim()) createCatMutation.mutate({ name: newCatName, type: newCatType });
+                    if (newCatName.trim()) createCatMutation.mutate({ name: newCatName.trim(), type: newCatType });
+                    else setCatError('اسم التصنيف مطلوب');
                   }
                 }}
                 autoFocus
               />
+              {catError && <p className="text-sm text-destructive" role="alert">{catError}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>نوع التصنيف *</Label>
@@ -547,12 +588,13 @@ export function ItemForm({ itemId }: { itemId?: number }) {
             </Button>
             <Button
               onClick={() => {
-                if (newCatName.trim()) createCatMutation.mutate({ name: newCatName, type: newCatType });
+                if (newCatName.trim()) createCatMutation.mutate({ name: newCatName.trim(), type: newCatType });
+                else setCatError('اسم التصنيف مطلوب');
               }}
               disabled={!newCatName.trim() || createCatMutation.isPending}
               className="gap-2"
             >
-              <Plus className="h-4 w-4" />
+              {createCatMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               {createCatMutation.isPending ? 'جاري الإضافة...' : 'إضافة التصنيف'}
             </Button>
           </DialogFooter>

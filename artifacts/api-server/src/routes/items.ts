@@ -24,9 +24,26 @@ import {
   ITEM_HISTORY_TYPES,
   type ItemHistoryType,
 } from "../lib/item-history-service";
-import { eq, and, ilike, or, lte, sql, isNotNull, asc, desc, type AnyColumn } from "drizzle-orm";
+import { eq, and, ne, ilike, or, lte, sql, isNotNull, asc, desc, type AnyColumn } from "drizzle-orm";
 
 const router = Router();
+
+function isValidIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function parseNonNegativeInteger(value: unknown, fallback: number) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function isUniqueViolation(error: unknown) {
+  const candidate = error as { cause?: { code?: string }; code?: string };
+  return candidate?.cause?.code === "23505" || candidate?.code === "23505";
+}
 
 // GET /api/items
 router.get("/", requireAuth, async (req, res) => {
@@ -158,18 +175,43 @@ router.post(
         supplier,
         notes,
       } = req.body;
-      if (!name || !itemType || !unit) {
-        res.status(400).json({ error: "name, itemType, and unit are required" });
+      const normalizedName = typeof name === "string" ? name.trim() : "";
+      const normalizedCode = typeof code === "string" ? code.trim() : "";
+      const normalizedUnit = typeof unit === "string" ? unit.trim() : "";
+      const normalizedExpiryDate = typeof expiryDate === "string" ? expiryDate.trim() : "";
+
+      if (normalizedName.length < 2 || !itemType || !normalizedUnit) {
+        res.status(400).json({ error: "اسم المادة والوحدة والنوع حقول مطلوبة" });
         return;
       }
-      const parsedStock = parseInt(currentStock, 10);
-      const parsedMinStock = parseInt(minStock, 10);
-      if (isNaN(parsedStock) || parsedStock < 0) {
-        res.status(400).json({ error: "currentStock must be a non-negative number" });
+      const parsedStock = parseNonNegativeInteger(currentStock, 0);
+      const parsedMinStock = parseNonNegativeInteger(minStock, 0);
+      if (parsedStock === null) {
+        res.status(400).json({ error: "الرصيد الافتتاحي يجب أن يكون عدداً صحيحاً غير سالب" });
         return;
       }
-      if (isNaN(parsedMinStock) || parsedMinStock < 0) {
-        res.status(400).json({ error: "minStock must be a non-negative number" });
+      if (parsedMinStock === null) {
+        res.status(400).json({ error: "الحد الأدنى يجب أن يكون عدداً صحيحاً غير سالب" });
+        return;
+      }
+      if (normalizedExpiryDate && !isValidIsoDate(normalizedExpiryDate)) {
+        res.status(400).json({ error: "تاريخ الصلاحية غير صالح" });
+        return;
+      }
+      if (normalizedCode) {
+        const [duplicate] = await db
+          .select({ id: itemsTable.id })
+          .from(itemsTable)
+          .where(eq(itemsTable.code, normalizedCode))
+          .limit(1);
+        if (duplicate) {
+          res.status(409).json({ error: "رمز المادة مستخدم مسبقاً. اختر رمزاً آخر" });
+          return;
+        }
+      }
+      const parsedCategoryId = categoryId ? Number(categoryId) : null;
+      if (parsedCategoryId !== null && (!Number.isSafeInteger(parsedCategoryId) || parsedCategoryId <= 0)) {
+        res.status(400).json({ error: "التصنيف المحدد غير صالح" });
         return;
       }
       const node = await ensureNodeIdentity("web");
@@ -177,17 +219,17 @@ router.post(
         const [created] = await tx
           .insert(itemsTable)
           .values({
-            code: code || null,
-            name,
-            categoryId: categoryId ? parseInt(categoryId, 10) : null,
+            code: normalizedCode || null,
+            name: normalizedName,
+            categoryId: parsedCategoryId,
             itemType,
-            unit,
+            unit: normalizedUnit,
             currentStock: parsedStock,
             minStock: parsedMinStock,
-            expiryDate: expiryDate || null,
-            batchNumber: batchNumber || null,
-            location: location || null,
-            supplier: supplier || null,
+            expiryDate: normalizedExpiryDate || null,
+            batchNumber: typeof batchNumber === "string" ? batchNumber.trim() || null : null,
+            location: typeof location === "string" ? location.trim() || null : null,
+            supplier: typeof supplier === "string" ? supplier.trim() || null : null,
             notes: notes || null,
           })
           .returning();
@@ -242,7 +284,11 @@ router.post(
       res.status(201).json(item);
     } catch (err) {
       console.error(err);
-      res.status(500).json({ error: "Internal server error" });
+      if (isUniqueViolation(err)) {
+        res.status(409).json({ error: "رمز المادة مستخدم مسبقاً. اختر رمزاً آخر" });
+        return;
+      }
+      res.status(500).json({ error: "تعذر حفظ المادة حالياً" });
     }
   }
 );
@@ -314,19 +360,24 @@ router.post(
           if (resolved !== undefined) categoryId = resolved;
         }
 
-        const currentStock = parseInt(String(item.currentStock ?? 0), 10);
-        const minStock = parseInt(String(item.minStock ?? 0), 10);
+        const currentStock = parseNonNegativeInteger(item.currentStock, 0);
+        const minStock = parseNonNegativeInteger(item.minStock, 0);
 
-        if (isNaN(currentStock) || currentStock < 0) {
-          results.errors.push({ row: rowNum, name, error: "الكمية الحالية يجب أن تكون رقماً موجباً" });
+        if (currentStock === null) {
+          results.errors.push({ row: rowNum, name, error: "الكمية الحالية يجب أن تكون عدداً صحيحاً غير سالب" });
           continue;
         }
-        if (isNaN(minStock) || minStock < 0) {
-          results.errors.push({ row: rowNum, name, error: "الحد الأدنى يجب أن يكون رقماً موجباً" });
+        if (minStock === null) {
+          results.errors.push({ row: rowNum, name, error: "الحد الأدنى يجب أن يكون عدداً صحيحاً غير سالب" });
           continue;
         }
 
         const code = item.code ? String(item.code).trim() : null;
+        const expiryDate = item.expiryDate ? String(item.expiryDate).trim() : "";
+        if (expiryDate && !isValidIsoDate(expiryDate)) {
+          results.errors.push({ row: rowNum, name, error: "تاريخ الصلاحية غير صالح ويجب أن يكون بصيغة YYYY-MM-DD" });
+          continue;
+        }
         const isUpdate = mode === "upsert" && code !== null && existingCodes.has(code);
 
         const values = {
@@ -337,7 +388,7 @@ router.post(
           unit,
           currentStock,
           minStock,
-          expiryDate: item.expiryDate ? String(item.expiryDate).trim() : null,
+          expiryDate: expiryDate || null,
           batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
           location: item.location ? String(item.location).trim() : null,
           supplier: item.supplier ? String(item.supplier).trim() : null,
@@ -390,6 +441,7 @@ router.post(
               });
             } else {
               results.created++;
+              if (code !== null) existingCodes.add(code);
               await auditLog({
                 req, action: "create", entityType: "item", entityId: saved.id,
                 details: { name: saved.name, source: "bulk-import" },
@@ -435,6 +487,7 @@ router.post(
               return [row];
             });
             results.created++;
+            if (code !== null) existingCodes.add(code);
             await auditLog({
               req, action: "create", entityType: "item", entityId: created.id,
               details: { name: created.name, source: "bulk-import" },
@@ -677,19 +730,73 @@ router.put(
         notes,
       } = req.body;
 
+      if (!Number.isSafeInteger(id) || id <= 0) {
+        res.status(400).json({ error: "معرّف المادة غير صالح" });
+        return;
+      }
+
       const updates: Partial<typeof itemsTable.$inferInsert> = {};
-      if (code !== undefined) updates.code = code || null;
-      if (name !== undefined) updates.name = name;
-      if (categoryId !== undefined)
-        updates.categoryId = categoryId ? parseInt(categoryId, 10) : null;
+      const normalizedCode = typeof code === "string" ? code.trim() : "";
+      const normalizedName = typeof name === "string" ? name.trim() : "";
+      const normalizedUnit = typeof unit === "string" ? unit.trim() : "";
+      const normalizedExpiryDate = typeof expiryDate === "string" ? expiryDate.trim() : "";
+
+      if (name !== undefined) {
+        if (normalizedName.length < 2) {
+          res.status(400).json({ error: "اسم المادة مطلوب ويجب أن يكون حرفين على الأقل" });
+          return;
+        }
+        updates.name = normalizedName;
+      }
+      if (code !== undefined) {
+        if (normalizedCode) {
+          const [duplicate] = await db
+            .select({ id: itemsTable.id })
+            .from(itemsTable)
+            .where(and(eq(itemsTable.code, normalizedCode), ne(itemsTable.id, id)))
+            .limit(1);
+          if (duplicate) {
+            res.status(409).json({ error: "رمز المادة مستخدم مسبقاً. اختر رمزاً آخر" });
+            return;
+          }
+        }
+        updates.code = normalizedCode || null;
+      }
+      if (categoryId !== undefined) {
+        const parsedCategoryId = categoryId ? Number(categoryId) : null;
+        if (parsedCategoryId !== null && (!Number.isSafeInteger(parsedCategoryId) || parsedCategoryId <= 0)) {
+          res.status(400).json({ error: "التصنيف المحدد غير صالح" });
+          return;
+        }
+        updates.categoryId = parsedCategoryId;
+      }
       if (itemType !== undefined) updates.itemType = itemType;
-      if (unit !== undefined) updates.unit = unit;
-      if (minStock !== undefined) updates.minStock = parseInt(minStock, 10);
-      if (expiryDate !== undefined) updates.expiryDate = expiryDate || null;
-      if (batchNumber !== undefined) updates.batchNumber = batchNumber || null;
-      if (location !== undefined) updates.location = location || null;
-      if (supplier !== undefined) updates.supplier = supplier || null;
-      if (notes !== undefined) updates.notes = notes || null;
+      if (unit !== undefined) {
+        if (!normalizedUnit) {
+          res.status(400).json({ error: "الوحدة مطلوبة" });
+          return;
+        }
+        updates.unit = normalizedUnit;
+      }
+      if (minStock !== undefined) {
+        const parsedMinStock = parseNonNegativeInteger(minStock, 0);
+        if (parsedMinStock === null) {
+          res.status(400).json({ error: "الحد الأدنى يجب أن يكون عدداً صحيحاً غير سالب" });
+          return;
+        }
+        updates.minStock = parsedMinStock;
+      }
+      if (expiryDate !== undefined) {
+        if (normalizedExpiryDate && !isValidIsoDate(normalizedExpiryDate)) {
+          res.status(400).json({ error: "تاريخ الصلاحية غير صالح" });
+          return;
+        }
+        updates.expiryDate = normalizedExpiryDate || null;
+      }
+      if (batchNumber !== undefined) updates.batchNumber = typeof batchNumber === "string" ? batchNumber.trim() || null : null;
+      if (location !== undefined) updates.location = typeof location === "string" ? location.trim() || null : null;
+      if (supplier !== undefined) updates.supplier = typeof supplier === "string" ? supplier.trim() || null : null;
+      if (notes !== undefined) updates.notes = typeof notes === "string" ? notes.trim() || null : null;
 
       const node = await ensureNodeIdentity("web");
       const item = await db.transaction(async (tx) => {
@@ -725,7 +832,11 @@ router.put(
       runAlertWorker().catch((e) => console.error("Alert worker:", e));
     } catch (err) {
       console.error(err);
-      res.status(500).json({ error: "Internal server error" });
+      if (isUniqueViolation(err)) {
+        res.status(409).json({ error: "رمز المادة مستخدم مسبقاً. اختر رمزاً آخر" });
+        return;
+      }
+      res.status(500).json({ error: "تعذر حفظ تعديلات المادة حالياً" });
     }
   }
 );
