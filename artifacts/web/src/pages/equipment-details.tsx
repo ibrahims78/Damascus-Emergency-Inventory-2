@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { CopyButton } from '@/components/copy-button';
 
 type MovementType = 'in' | 'init' | 'out' | 'adjust' | 'custody_out' | 'custody_return' | 'damage' | 'central_return';
 type EquipmentHistory = {
@@ -158,7 +159,7 @@ export function EquipmentDetailsPage({ equipmentId: providedId }: { equipmentId?
         <CardHeader className="pb-4"><CardTitle className="text-base">بيانات التجهيز</CardTitle><CardDescription>البيانات الحالية والحقول التي تساعد على التعرف الدقيق على الوحدة.</CardDescription></CardHeader>
         <CardContent className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <Info label="النوع" value={equipment.equipmentType} /><Info label="الموديل" value={equipment.model} />
-          <Info label="الرقم التسلسلي" value={equipment.serialNumber} /><Info label="سنة الصنع" value={equipment.manufactureYear} />
+           <div><p className="text-xs text-muted-foreground">الرقم التسلسلي</p><div className="mt-1 flex items-center gap-1"><p className="font-medium font-mono">{equipment.serialNumber || 'غير محدد'}</p><CopyButton value={equipment.serialNumber} label="الرقم التسلسلي" /></div></div><Info label="سنة الصنع" value={equipment.manufactureYear} />
           <Info label="بلد المنشأ" value={equipment.originCountry} /><Info label="الحائز الحالي" value={equipment.currentHolder} />
           <Info label="الحالة" value={condition.label} /><Info label="حد التنبيه" value={equipment.minQuantity} />
           {equipment.maintenanceSentAt && <Info label="بيانات الصيانة" value={`${dateOnly(equipment.maintenanceSentAt)}${equipment.maintenanceReturnedAt ? ` — عودة ${dateOnly(equipment.maintenanceReturnedAt)}` : ''}`} className="sm:col-span-2" />}

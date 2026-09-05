@@ -29,6 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatDateTime } from '@/lib/utils';
+import { CopyButton } from '@/components/copy-button';
 import { TransactionInForm } from './transaction-in-form';
 import { TransactionOutForm } from './transaction-out-form';
 
@@ -104,24 +105,50 @@ function typeBadge(type: string) {
 function TransactionsList() {
   const [, setLocation] = useLocation();
   const [page, setPage] = useState(1);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [itemTypeFilter, setItemTypeFilter] = useState<ItemTypeFilter>('all');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const initialParams = new URLSearchParams(window.location.search);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(() => {
+    const value = initialParams.get('type');
+    return ['all', 'in', 'out', 'adjust', 'custody_out', 'custody_return', 'damage', 'central_return'].includes(value ?? '')
+      ? (value as TypeFilter)
+      : 'all';
+  });
+  const [itemTypeFilter, setItemTypeFilter] = useState<ItemTypeFilter>(() => {
+    const value = initialParams.get('itemType');
+    return ['all', 'item', 'equipment'].includes(value ?? '') ? (value as ItemTypeFilter) : 'all';
+  });
+  const [fromDate, setFromDate] = useState(() => initialParams.get('from') ?? '');
+  const [toDate, setToDate] = useState(() => initialParams.get('to') ?? '');
   const [searchInput, setSearchInput] = useState(() => {
-    try { return new URLSearchParams(window.location.search).get('search') ?? ''; } catch { return ''; }
+    return initialParams.get('search') ?? '';
   });
   const search = useDebounce(searchInput, 400);
+  const dateRangeError = fromDate && toDate && fromDate > toDate
+    ? 'تاريخ البداية لا يمكن أن يتجاوز تاريخ النهاية'
+    : '';
 
-  const { data, isLoading } = useListTransactions({
-    type: typeFilter === 'all' ? undefined : typeFilter,
-    itemType: itemTypeFilter === 'all' ? undefined : itemTypeFilter,
-    from: fromDate || undefined,
-    to: toDate || undefined,
-    search: search || undefined,
-    page,
-    limit: PAGE_SIZE,
-  });
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (typeFilter !== 'all') params.set('type', typeFilter);
+    if (itemTypeFilter !== 'all') params.set('itemType', itemTypeFilter);
+    if (fromDate) params.set('from', fromDate);
+    if (toDate) params.set('to', toDate);
+    if (searchInput.trim()) params.set('search', searchInput.trim());
+    const query = params.toString();
+    window.history.replaceState(null, '', query ? `/transactions?${query}` : '/transactions');
+  }, [typeFilter, itemTypeFilter, fromDate, toDate, searchInput]);
+
+  const { data, isLoading } = useListTransactions(
+    {
+      type: typeFilter === 'all' ? undefined : typeFilter,
+      itemType: itemTypeFilter === 'all' ? undefined : itemTypeFilter,
+      from: fromDate || undefined,
+      to: toDate || undefined,
+      search: search || undefined,
+      page,
+      limit: PAGE_SIZE,
+    },
+    { query: { enabled: !dateRangeError } as any },
+  );
 
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 1;
 
@@ -276,6 +303,11 @@ function TransactionsList() {
       </div>
 
       {/* Table */}
+      {dateRangeError && (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {dateRangeError}
+        </div>
+      )}
       <div className="bg-card border rounded-lg shadow-sm">
         <div className="overflow-x-auto">
           <Table>
@@ -317,7 +349,10 @@ function TransactionsList() {
                   return (
                     <TableRow key={tx.id} className="hover:bg-muted/40 cursor-default">
                       <TableCell className="font-mono text-xs text-muted-foreground">
-                        {tx.documentNumber}
+                        <span className="inline-flex items-center gap-1">
+                          {tx.documentNumber}
+                          <CopyButton value={tx.documentNumber} label="رقم السند" />
+                        </span>
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {formatDateTime(tx.createdAt)}

@@ -67,6 +67,8 @@ export function TransactionOutForm() {
   const { toast } = useToast();
   const [pendingConfirm, setPendingConfirm] = useState(false);
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
+  const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
+  const [reasonPickerOpen, setReasonPickerOpen] = useState(false);
 
   const { data: itemsData } = useListItems({ limit: 5000 });
   const { data: recipients } = useListRecipients();
@@ -484,26 +486,24 @@ export function TransactionOutForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>اسم المستلم / الجهة *</FormLabel>
-                  <Select
+                  <CatalogCombobox
                     value={field.value && field.value > 0 ? field.value.toString() : ''}
-                    onValueChange={(v) => {
-                      field.onChange(parseInt(v));
+                    open={recipientPickerOpen}
+                    onOpenChange={setRecipientPickerOpen}
+                    onValueChange={(value) => {
+                      field.onChange(Number(value));
                       setPendingConfirm(false);
                     }}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر الجهة المستلمة..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {recipients?.map((r: Recipient) => (
-                        <SelectItem key={r.id} value={r.id.toString()}>
-                          {r.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="اختر الجهة المستلمة..."
+                    searchPlaceholder="ابحث باسم المستلم أو الجهة..."
+                    emptyMessage="لا توجد جهة مستلمة مطابقة"
+                    loading={!recipients}
+                    options={(recipients ?? []).map((recipient: Recipient) => ({
+                      value: recipient.id.toString(),
+                      searchValue: `${recipient.id} ${recipient.name}`,
+                      label: recipient.name,
+                    }))}
+                  />
                   <FormMessage />
                 </FormItem>
               )}
@@ -516,26 +516,24 @@ export function TransactionOutForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>سبب الإخراج *</FormLabel>
-                  <Select
+                  <CatalogCombobox
                     value={field.value && field.value > 0 ? field.value.toString() : ''}
-                    onValueChange={(v) => {
-                      field.onChange(parseInt(v));
+                    open={reasonPickerOpen}
+                    onOpenChange={setReasonPickerOpen}
+                    onValueChange={(value) => {
+                      field.onChange(Number(value));
                       setPendingConfirm(false);
                     }}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر سبب الإخراج..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {exitReasons?.map((r: ExitReason) => (
-                        <SelectItem key={r.id} value={r.id.toString()}>
-                          {r.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="اختر سبب الإخراج..."
+                    searchPlaceholder="ابحث في أسباب الإخراج..."
+                    emptyMessage="لا يوجد سبب إخراج مطابق"
+                    loading={!exitReasons}
+                    options={(exitReasons ?? []).map((reason: ExitReason) => ({
+                      value: reason.id.toString(),
+                      searchValue: `${reason.id} ${reason.name}`,
+                      label: reason.name,
+                    }))}
+                  />
                   <FormMessage />
                 </FormItem>
               )}

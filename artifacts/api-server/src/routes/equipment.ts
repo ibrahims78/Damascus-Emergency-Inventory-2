@@ -13,6 +13,21 @@ import {
 
 const router = Router();
 
+function isValidDateString(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function maintenanceDateError(sentAt: unknown, returnedAt: unknown): string | null {
+  if (sentAt && !isValidDateString(sentAt)) return "تاريخ الإرسال للصيانة غير صالح";
+  if (returnedAt && !isValidDateString(returnedAt)) return "تاريخ الإعادة من الصيانة غير صالح";
+  if (typeof sentAt === "string" && typeof returnedAt === "string" && returnedAt < sentAt) {
+    return "تاريخ الإعادة من الصيانة لا يمكن أن يسبق تاريخ الإرسال";
+  }
+  return null;
+}
+
 // GET /api/equipment
 router.get("/", requireAuth, async (req, res) => {
   try {
@@ -114,6 +129,11 @@ router.post(
       const minQty = minQuantity !== undefined ? parseInt(String(minQuantity), 10) : 0;
       const finalQty = isNaN(qty) || qty < 1 ? 1 : qty;
       const sn = serialNumber ? String(serialNumber).trim() : null;
+      const maintenanceError = maintenanceDateError(maintenanceSentAt, maintenanceReturnedAt);
+      if (maintenanceError) {
+        res.status(400).json({ error: maintenanceError });
+        return;
+      }
 
       // A serial number uniquely identifies one physical unit — quantity must be 1
       if (sn && finalQty > 1) {
@@ -444,6 +464,12 @@ router.put(
       if (maintenanceSentAt !== undefined) updates.maintenanceSentAt = maintenanceSentAt || null;
       if (maintenanceReturnedAt !== undefined) updates.maintenanceReturnedAt = maintenanceReturnedAt || null;
       if (maintenanceNotes !== undefined) updates.maintenanceNotes = maintenanceNotes || null;
+
+      const maintenanceError = maintenanceDateError(maintenanceSentAt, maintenanceReturnedAt);
+      if (maintenanceError) {
+        res.status(400).json({ error: maintenanceError });
+        return;
+      }
 
       // Determine effective serialNumber and quantity after merges
       if (updates.serialNumber !== undefined || updates.quantity !== undefined) {

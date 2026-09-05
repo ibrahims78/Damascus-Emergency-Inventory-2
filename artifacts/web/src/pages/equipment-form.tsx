@@ -30,6 +30,8 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
+import { CopyButton } from '@/components/copy-button';
+import { maintenanceDateError, serialQuantityError } from '@/lib/equipment-validation';
 
 /* ──────────────────────────── Schema ───────────────────────────────────── */
 
@@ -59,17 +61,21 @@ const equipmentSchema = z
     maintenanceReturnedAt: z.string().optional().nullable(),
     maintenanceNotes:     z.string().optional().nullable(),
   })
-  .refine(
-    (data) => {
-      const sn = data.serialNumber?.trim();
-      if (sn && data.quantity > 1) return false;
-      return true;
-    },
-    {
-      message: 'التجهيزات ذات الرقم التسلسلي يجب أن تكون كميتها 1 فقط — الرقم التسلسلي يعرّف جهازاً واحداً بعينه',
-      path: ['quantity'],
+  .superRefine((data, ctx) => {
+    const serialError = serialQuantityError(data.serialNumber, data.quantity);
+    if (serialError) ctx.addIssue({ code: 'custom', message: serialError, path: ['quantity'] });
+
+    const maintenanceError = maintenanceDateError(data.maintenanceSentAt, data.maintenanceReturnedAt);
+    if (maintenanceError) {
+      ctx.addIssue({
+        code: 'custom',
+        message: maintenanceError,
+        path: data.maintenanceReturnedAt && data.maintenanceReturnedAt < (data.maintenanceSentAt ?? '')
+          ? ['maintenanceReturnedAt']
+          : ['maintenanceSentAt'],
+      });
     }
-  );
+  });
 
 type EquipmentFormValues = z.infer<typeof equipmentSchema>;
 
@@ -235,6 +241,15 @@ export function EquipmentForm({ equipmentId }: { equipmentId?: number }) {
     return '';
   };
 
+  const applyServerError = (err: unknown) => {
+    const message = getServerErrorMessage(err);
+    if (message.includes('الرقم التسلسلي')) {
+      form.setError('serialNumber', { type: 'server', message });
+      return;
+    }
+    toast.error(message || 'حدث خطأ أثناء حفظ التجهيز');
+  };
+
   const onSubmit = (data: EquipmentFormValues) => {
     const payload = {
       ...data,
@@ -256,8 +271,7 @@ export function EquipmentForm({ equipmentId }: { equipmentId?: number }) {
             setLocation('/equipment');
           },
           onError: (err) => {
-            const msg = getServerErrorMessage(err);
-            toast.error(msg || 'حدث خطأ أثناء حفظ التجهيز');
+            applyServerError(err);
           },
         }
       );
@@ -270,8 +284,7 @@ export function EquipmentForm({ equipmentId }: { equipmentId?: number }) {
             setLocation('/equipment');
           },
           onError: (err) => {
-            const msg = getServerErrorMessage(err);
-            toast.error(msg || 'حدث خطأ أثناء إضافة التجهيز');
+            applyServerError(err);
           },
         }
       );
@@ -438,13 +451,16 @@ export function EquipmentForm({ equipmentId }: { equipmentId?: number }) {
                     <FormItem>
                       <FormLabel>الرقم التسلسلي (S/N)</FormLabel>
                       <FormControl>
-                        <Input
-                          {...field}
-                          value={field.value || ''}
-                          dir="ltr"
-                          className="text-right"
-                          placeholder="اتركه فارغاً للمستلزمات المجمّعة"
-                        />
+                        <div className="flex items-center gap-2">
+                          <Input
+                            {...field}
+                            value={field.value || ''}
+                            dir="ltr"
+                            className="text-right"
+                            placeholder="اتركه فارغاً للمستلزمات المجمّعة"
+                          />
+                          <CopyButton value={field.value} label="الرقم التسلسلي" className="shrink-0" />
+                        </div>
                       </FormControl>
                       <p className="text-xs text-muted-foreground">
                         إدخاله يُقيّد الكمية تلقائياً عند 1
