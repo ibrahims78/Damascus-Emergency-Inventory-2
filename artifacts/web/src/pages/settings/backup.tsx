@@ -36,6 +36,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
@@ -150,6 +160,7 @@ export function BackupTab() {
   const [restoring, setRestoring] = useState(false);
   const [restorePointId, setRestorePointId] = useState<string | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [restoreResult, setRestoreResult] = useState<{
     applied: number;
     duplicate: number;
@@ -268,9 +279,14 @@ export function BackupTab() {
     }
   };
 
+  const requestRestore = () => {
+    if (!preview || !packageBase64) return;
+    setRestoreConfirmOpen(true);
+  };
+
   const applyRestore = async () => {
     if (!preview || !packageBase64) return;
-    if (!window.confirm('سيتم تطبيق الاستعادة بعد المعاينة. هل تريد المتابعة؟')) return;
+    setRestoreConfirmOpen(false);
     setRestoring(true);
     setRestoreError(null);
     setRestoreResult(null);
@@ -446,7 +462,7 @@ export function BackupTab() {
             {preview.report.records.some((record) => record.status === 'rejected' || record.status === 'conflict') && (
               <p className="text-sm text-destructive">توجد سجلات مرفوضة أو متعارضة؛ لن يسمح الخادم بالتطبيق حتى تصحح الحزمة.</p>
             )}
-            <Button onClick={applyRestore} disabled={restoring || (preview.report.counts.rejected ?? 0) > 0} className="gap-2">
+           <Button onClick={requestRestore} disabled={restoring || (preview.report.counts.rejected ?? 0) > 0} className="gap-2">
               <CheckCircle2 className="h-4 w-4" /> تأكيد وتطبيق الاستعادة
             </Button>
           </div>
@@ -487,6 +503,23 @@ export function BackupTab() {
            <li>كل استعادة تنشئ نقطة تراجع وتقريراً قابلاً للمراجعة</li>
         </ul>
       </div>
+
+      <AlertDialog open={restoreConfirmOpen} onOpenChange={setRestoreConfirmOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد تطبيق الاستعادة</AlertDialogTitle>
+            <AlertDialogDescription>
+              ستُطبّق نتيجة المعاينة على قاعدة البيانات، وستُحفظ نقطة تراجع تلقائية. لا تتابع إلا بعد مراجعة عدد السجلات والتعارضات.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={restoring}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void applyRestore()} disabled={restoring}>
+              متابعة الاستعادة
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import {
   Activity,
@@ -207,6 +208,21 @@ const roleRows = [
   { role: 'مراقب', access: 'عرض البيانات والتقارير والتنبيهات دون تنفيذ العمليات الحساسة.', icon: Users },
 ];
 
+const glossary = [
+  ['الرصيد', 'الكمية المسجلة والمتاحة في المستودع بعد احتساب الحركات المعتمدة.'],
+  ['العهدة', 'كمية أو تجهيز أصبح مسؤولية مستلم محدد، وتبقى مفتوحة حتى الإعادة الكاملة.'],
+  ['التسوية', 'حركة موثقة لمعالجة فرق مثبت بين الجرد الفعلي والرصيد النظامي.'],
+  ['FEFO', 'صرف الدفعات الأقرب إلى انتهاء الصلاحية أولاً لتقليل الهدر.'],
+  ['المزامنة', 'تبادل التغييرات بين عقد موثوقة مع كشف التكرار والتعارض قبل التطبيق.'],
+];
+
+const faqs = [
+  ['متى أستخدم التسوية بدل الإدخال أو الإخراج؟', 'استخدم التسوية فقط عندما يثبت الجرد فرقاً عن الرصيد المسجل. الحركة العادية يجب أن تسجل كإدخال أو إخراج حتى يبقى التدقيق دقيقاً.'],
+  ['هل يمكن حذف حركة معتمدة؟', 'لا. الحركات المعتمدة جزء من سجل التدقيق؛ صححها بحركة جديدة موثقة أو بتسوية مبررة حسب الحالة.'],
+  ['كيف أتعامل مع تعارض مزامنة حرج؟', 'أوقف التطبيق، راجع العنصر ورقم العملية في طابور التعارضات، ثم اعتمد أو ارفض بعد التحقق من المستند الأصلي. لا تتجاهل التعارض الحرج.'],
+  ['ما الفرق بين النسخة الاحتياطية وحزمة المزامنة؟', 'النسخة الاحتياطية تحفظ حالة قاعدة البيانات للفحص والاستعادة، أما حزمة المزامنة فتنقل تغييرات قابلة للتطبيق بين عقد موثوقة. كلاهما مشفر ويحتاج كلمة المرور الخاصة به.'],
+];
+
 function SectionHeading({
   eyebrow,
   title,
@@ -295,6 +311,19 @@ function OperationCard({ operation }: { operation: Operation }) {
 }
 
 export function HelpPage() {
+  const [search, setSearch] = useState('');
+  const normalizedSearch = search.trim().toLocaleLowerCase('ar');
+  const filteredOperations = useMemo(
+    () => operations.filter((operation) =>
+      !normalizedSearch ||
+      [operation.title, operation.summary, operation.when, ...operation.steps, ...operation.notes]
+        .join(' ')
+        .toLocaleLowerCase('ar')
+        .includes(normalizedSearch),
+    ),
+    [normalizedSearch],
+  );
+
   return (
     <div className="mx-auto max-w-6xl space-y-12 pb-10" dir="rtl">
       <section className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary via-primary/90 to-cyan-700 px-6 py-8 text-primary-foreground shadow-lg md:px-10 md:py-10">
@@ -319,6 +348,17 @@ export function HelpPage() {
           <Search className="h-4 w-4 text-primary" />
           انتقال سريع داخل الدليل
         </div>
+        <div className="relative mb-3">
+          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="ابحث عن عملية أو مصطلح أو سؤال..."
+            aria-label="البحث في مركز المساعدة"
+            className="h-11 w-full rounded-lg border bg-background px-10 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {[
             ['#overview', 'التعريف'],
@@ -326,6 +366,8 @@ export function HelpPage() {
             ['#operations', 'العمليات'],
             ['#monitoring', 'المتابعة'],
             ['#roles', 'الصلاحيات'],
+            ['#glossary', 'المصطلحات'],
+            ['#faq', 'الأسئلة الشائعة'],
           ].map(([href, label]) => (
             <a
               key={href}
@@ -397,7 +439,11 @@ export function HelpPage() {
           icon={ArrowRight}
         />
         <div className="space-y-5">
-          {operations.map(operation => <OperationCard key={operation.id} operation={operation} />)}
+          {filteredOperations.length ? filteredOperations.map(operation => <OperationCard key={operation.id} operation={operation} />) : (
+            <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+              لا توجد عملية مطابقة. جرّب كلمة أخرى مثل «إدخال» أو «عهدة» أو «تسوية».
+            </div>
+          )}
         </div>
       </section>
 
@@ -430,6 +476,49 @@ export function HelpPage() {
               <p>افتح التنبيه للانتقال إلى السجل المرتبط، ثم علّمه كمقروء أو عالجه حسب صلاحيتك.</p>
             </CardContent>
           </Card>
+        </div>
+      </section>
+
+      <section id="glossary" className="scroll-mt-6">
+        <SectionHeading
+          eyebrow="06 / المصطلحات"
+          title="قاموس سريع"
+          description="تعريفات مختصرة للمصطلحات التي تظهر في النماذج والتقارير والمزامنة."
+          icon={BookOpen}
+        />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {glossary.map(([term, description]) => (
+            <Card key={term}>
+              <CardContent className="p-4">
+                <h3 className="font-bold text-primary">{term}</h3>
+                <p className="mt-2 text-sm leading-7 text-muted-foreground">{description}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section id="faq" className="scroll-mt-6">
+        <SectionHeading
+          eyebrow="07 / الأسئلة الشائعة"
+          title="إجابات عملية قبل طلب الدعم"
+          description="افتح السؤال المطابق للحالة، ثم انتقل إلى الإجراء المرتبط إذا احتجت تنفيذًا فعليًا."
+          icon={Info}
+        />
+        <div className="space-y-3">
+          {faqs
+            .filter(([question, answer]) => !normalizedSearch || `${question} ${answer}`.toLocaleLowerCase('ar').includes(normalizedSearch))
+            .map(([question, answer]) => (
+              <details key={question} className="group rounded-xl border bg-card p-4">
+                <summary className="cursor-pointer list-none font-semibold marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <span className="flex items-center justify-between gap-4">
+                    {question}
+                    <span className="text-primary transition-transform group-open:rotate-45" aria-hidden="true">＋</span>
+                  </span>
+                </summary>
+                <p className="mt-3 border-t pt-3 text-sm leading-7 text-muted-foreground">{answer}</p>
+              </details>
+            ))}
         </div>
       </section>
 

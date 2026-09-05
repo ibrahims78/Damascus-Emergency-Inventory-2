@@ -38,6 +38,16 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -127,6 +137,7 @@ export function CategoriesTab() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [editType, setEditType] = useState<'consumable' | 'equipment'>('consumable');
+  const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
 
   const { data: categories = [], isLoading } = useQuery<Category[]>({
     queryKey: ['categories-settings'],
@@ -287,9 +298,7 @@ export function CategoriesTab() {
                           size="icon" variant="ghost"
                           className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                           title="حذف"
-                          onClick={() => {
-                            if (confirm(`حذف تصنيف "${cat.name}"؟`)) deleteMutation.mutate(cat.id);
-                          }}
+                           onClick={() => setDeleteTarget(cat)}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
@@ -302,6 +311,28 @@ export function CategoriesTab() {
           )
         )}
       </div>
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف التصنيف؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيُحذف التصنيف «{deleteTarget?.name}» إذا لم يكن مستخدمًا. إذا كان مرتبطًا بمواد سيعرض النظام سبب المنع دون حذف البيانات.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+                setDeleteTarget(null);
+              }}
+            >
+              حذف التصنيف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

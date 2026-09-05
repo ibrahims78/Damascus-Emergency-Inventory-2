@@ -1,9 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
+import { CopyButton } from "@/components/copy-button";
+import { AlertTriangle, CircleDot, RefreshCw, ShieldCheck } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type NodeInfo = { nodeId: string; installationId: string; nodeType: string; vector: Record<string, number> };
 type TrustedNode = { nodeId: string; nodeType: string; label?: string | null; status: string; pairedAt: string };
@@ -59,26 +71,46 @@ export function SyncPage() {
   const [importPassword, setImportPassword] = useState("");
   const [importResult, setImportResult] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [activeStep, setActiveStep] = useState("identity");
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [confirmImportOpen, setConfirmImportOpen] = useState(false);
+
+  const steps = useMemo(() => [
+    { id: "identity", label: "هوية العقدة", hint: "Node ID وعداد التغييرات" },
+    { id: "pairing", label: "الاقتران", hint: "الثقة والرمز أحادي الاستخدام" },
+    { id: "exchange", label: "التبادل", hint: "إرسال واستقبال مع ACK" },
+    { id: "relay", label: "Relay", hint: "نقل ملف مشفر كما هو" },
+    { id: "conflicts", label: "التعارضات", hint: "قرار موثق لكل تعارض" },
+  ], []);
 
   const refresh = useCallback(async () => {
-    const [nodeResult, trustedResult, conflictsResult, relayResult] = await Promise.all([
-      api<NodeInfo>("/node"),
-      api<TrustedNode[]>("/trusted-nodes"),
-      api<Conflict[]>("/conflicts"),
-      api<RelayPackage[]>("/relay/packages"),
-    ]);
-    setNode(nodeResult);
-    setNodes(trustedResult);
-    setConflicts(conflictsResult);
-    setRelayPackages(relayResult);
+    setError(null);
+    try {
+      const [nodeResult, trustedResult, conflictsResult, relayResult] = await Promise.all([
+        api<NodeInfo>("/node"),
+        api<TrustedNode[]>("/trusted-nodes"),
+        api<Conflict[]>("/conflicts"),
+        api<RelayPackage[]>("/relay/packages"),
+      ]);
+      setNode(nodeResult);
+      setNodes(trustedResult);
+      setConflicts(conflictsResult);
+      setRelayPackages(relayResult);
+    } catch (refreshError) {
+      setError((refreshError as Error).message);
+      throw refreshError;
+    }
   }, []);
 
   useEffect(() => {
-    refresh().catch((error: Error) => setMessage(error.message));
+    refresh().catch(() => undefined);
   }, [refresh]);
 
   async function createPairing() {
+    setActiveStep("pairing");
+    setError(null);
     setBusy(true);
     try {
       const result = await api<{ code: string; expiresAt: string }>("/pairings", {
@@ -88,13 +120,15 @@ export function SyncPage() {
       setPairingCode(result.code);
       setMessage(`رمز الاقتران صالح حتى ${formatDate(result.expiresAt)} ويُستخدم مرة واحدة.`);
     } catch (error) {
-      setMessage((error as Error).message);
+      setError((error as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   async function consumePairing() {
+    setActiveStep("pairing");
+    setError(null);
     setBusy(true);
     try {
       await api("/pairings/consume", {
@@ -106,28 +140,32 @@ export function SyncPage() {
       setMessage("تمت إضافة العقدة إلى قائمة الثقة.");
       await refresh();
     } catch (error) {
-      setMessage((error as Error).message);
+      setError((error as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   async function resolveConflict(id: number, resolution: "approve" | "reject" | "defer") {
+    setActiveStep("conflicts");
+    setError(null);
     setBusy(true);
     try {
       await api(`/conflicts/${id}/resolve`, { method: "POST", body: JSON.stringify({ resolution }) });
       setMessage("تم حفظ قرار التسوية في سجل التدقيق.");
       await refresh();
     } catch (error) {
-      setMessage((error as Error).message);
+      setError((error as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   async function runExchange() {
+    setActiveStep("exchange");
+    setError(null);
     if (!peerUrl || !peerUsername || !peerPassword) {
-      setMessage("أدخل عنوان الخادم واسم المستخدم وكلمة المرور.");
+      setError("أدخل عنوان الخادم واسم المستخدم وكلمة المرور.");
       return;
     }
     setBusy(true);
@@ -148,17 +186,21 @@ export function SyncPage() {
           `محلياً: ${summarize(result.local?.counts ?? {})}. ` +
           `لدى الطرف الآخر: ${summarize(result.peerReport?.counts ?? {})}.`,
       );
+      setLastSyncAt(new Date().toISOString());
+      setMessage("تم استلام ACK من الطرف الآخر وتحديث حالة الجلسة.");
       await refresh();
     } catch (error) {
-      setMessage((error as Error).message);
+      setError((error as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   async function exportPackage() {
+    setActiveStep("relay");
+    setError(null);
     if (!exportPassword) {
-      setMessage("أدخل كلمة مرور الحزمة.");
+      setError("أدخل كلمة مرور الحزمة.");
       return;
     }
     setBusy(true);
@@ -182,27 +224,42 @@ export function SyncPage() {
       URL.revokeObjectURL(url);
       setMessage("تم تصدير حزمة المزامنة — انقل الملف إلى النسخة الأخرى واستوردها من صفحة المزامنة هناك.");
     } catch (error) {
-      setMessage((error as Error).message);
+      setError((error as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   async function importPackage() {
-    if (!importFile || !importPassword) {
-      setMessage("اختر ملف الحزمة وأدخل كلمة المرور.");
+    setActiveStep("relay");
+    const selectedFile = importFile;
+    const selectedPassword = importPassword;
+    if (!selectedFile || !selectedPassword) {
+      setError("اختر ملف الحزمة وأدخل كلمة المرور.");
+      return;
+    }
+    setConfirmImportOpen(true);
+  }
+
+  async function confirmImportPackage() {
+    setConfirmImportOpen(false);
+    setError(null);
+    const selectedFile = importFile;
+    const selectedPassword = importPassword;
+    if (!selectedFile || !selectedPassword) {
+      setError("اختر ملف الحزمة وأدخل كلمة المرور.");
       return;
     }
     setBusy(true);
     try {
-      const bytes = new Uint8Array(await importFile.arrayBuffer());
+      const bytes = new Uint8Array(await selectedFile.arrayBuffer());
       let binary = "";
       for (let index = 0; index < bytes.length; index += 0x8000) {
         binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
       }
       const result = await api<{ mode: string; report: { counts: Record<string, number> } }>("/import", {
         method: "POST",
-        body: JSON.stringify({ packageBase64: btoa(binary), password: importPassword }),
+        body: JSON.stringify({ packageBase64: btoa(binary), password: selectedPassword }),
       });
       const counts = result.report?.counts ?? {};
       setImportResult(
@@ -210,15 +267,17 @@ export function SyncPage() {
       );
       await refresh();
     } catch (error) {
-      setMessage((error as Error).message);
+      setError((error as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   async function uploadManualFile() {
+    setActiveStep("relay");
+    setError(null);
     if (!manualFile || !sessionId || !node?.nodeId || !targetNodeId) {
-      setMessage("أدخل Session ID وNode ID للوجهة واختر ملف .dme-sync أولاً.");
+      setError("أدخل Session ID وNode ID للوجهة واختر ملف .dme-sync أولاً.");
       return;
     }
     setBusy(true);
@@ -245,13 +304,15 @@ export function SyncPage() {
       setMessage("تم رفع الملف المشفر إلى Relay. لا يقرأ الخادم محتواه.");
       await refresh();
     } catch (error) {
-      setMessage((error as Error).message);
+      setError((error as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   async function downloadManualFile(relayId: string, packageId: string) {
+    setActiveStep("relay");
+    setError(null);
     setBusy(true);
     try {
       const result = await api<{ payloadBase64: string }>(`/relay/packages/${relayId}?download=true`);
@@ -266,7 +327,7 @@ export function SyncPage() {
       setMessage("تم تنزيل الملف. يجب فحصه محلياً قبل التطبيق.");
       await refresh();
     } catch (error) {
-      setMessage((error as Error).message);
+      setError((error as Error).message);
     } finally {
       setBusy(false);
     }
@@ -281,7 +342,50 @@ export function SyncPage() {
         </p>
       </div>
 
-      {message && <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm">{message}</div>}
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="space-y-4 p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-semibold">مسار مزامنة واضح وآمن</p>
+              <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                ابدأ بالهوية، ثم الاقتران، ثم نفّذ التبادل أو انقل ملفًا مشفرًا. لا تعتبر الجلسة مكتملة قبل ظهور ACK.
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-5">
+            {steps.map((step, index) => {
+              const active = step.id === activeStep;
+              return (
+                <button
+                  type="button"
+                  key={step.id}
+                  onClick={() => setActiveStep(step.id)}
+                  className={`rounded-lg border p-3 text-right transition-colors ${active ? "border-primary bg-background shadow-sm" : "bg-background/50 hover:bg-background"}`}
+                  aria-current={active ? "step" : undefined}
+                >
+                  <span className="flex items-center justify-between gap-2 text-xs font-bold">
+                    <span>{index + 1}. {step.label}</span>
+                    {active ? <CircleDot className="h-4 w-4 text-primary" /> : <span className="text-muted-foreground">○</span>}
+                  </span>
+                  <span className="mt-1 block text-[11px] text-muted-foreground">{step.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+          <Progress value={((steps.findIndex((step) => step.id === activeStep) + 1) / steps.length) * 100} aria-label="تقدم خطوات المزامنة" />
+        </CardContent>
+      </Card>
+
+      {error && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 shrink-0" />{error}</span>
+          <Button size="sm" variant="outline" onClick={() => void refresh()} disabled={busy}>
+            <RefreshCw className="h-4 w-4" /> إعادة المحاولة
+          </Button>
+        </div>
+      )}
+      {message && <div role="status" className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm">{message}</div>}
 
       <Card>
         <CardHeader><CardTitle>مزامنة شبكية مباشرة</CardTitle></CardHeader>
@@ -304,7 +408,16 @@ export function SyncPage() {
           <CardHeader><CardTitle>هوية هذه العقدة</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div><span className="text-muted-foreground">النوع: </span>{node?.nodeType ?? "—"}</div>
-            <div className="break-all"><span className="text-muted-foreground">Node ID: </span>{node?.nodeId ?? "جار التحميل…"}</div>
+            <div className="flex items-start gap-1">
+              <span className="text-muted-foreground">Node ID: </span>
+              <span className="break-all" dir="ltr">{node?.nodeId ?? "جار التحميل…"}</span>
+              <CopyButton value={node?.nodeId} label="Node ID" />
+            </div>
+            <div className="flex items-start gap-1">
+              <span className="text-muted-foreground">Installation ID: </span>
+              <span className="break-all" dir="ltr">{node?.installationId ?? "—"}</span>
+              <CopyButton value={node?.installationId} label="Installation ID" />
+            </div>
             <div><span className="text-muted-foreground">التغييرات المسجلة: </span>{node ? Object.values(node.vector).reduce((sum, value) => sum + value, 0) : "—"}</div>
           </CardContent>
         </Card>
@@ -316,7 +429,12 @@ export function SyncPage() {
               <Input value={pairingTargetNodeId} onChange={(event) => setPairingTargetNodeId(event.target.value)} placeholder="Node ID للوجهة (اختياري)" dir="ltr" />
               <Button onClick={createPairing} disabled={busy}>إنشاء رمز</Button>
             </div>
-            {pairingCode && <div className="rounded border border-primary/30 bg-primary/5 p-4 text-center text-2xl font-bold tracking-[0.3em]" dir="ltr">{pairingCode}</div>}
+            {pairingCode && (
+              <div className="flex items-center justify-center gap-2 rounded border border-primary/30 bg-primary/5 p-4">
+                <span className="text-2xl font-bold tracking-[0.3em]" dir="ltr">{pairingCode}</span>
+                <CopyButton value={pairingCode} label="رمز الاقتران" />
+              </div>
+            )}
             <div className="flex gap-2">
               <Input value={consumeCode} onChange={(event) => setConsumeCode(event.target.value)} placeholder="إدخال رمز من عقدة أخرى" dir="ltr" />
               <Input value={consumeNodeId} onChange={(event) => setConsumeNodeId(event.target.value)} placeholder="Node ID للعقدة المصدر" dir="ltr" />
@@ -347,6 +465,7 @@ export function SyncPage() {
           <CardHeader><CardTitle>نقل ملف ‎.dme-sync‎ يدوياً</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">يُحفظ الملف مشفراً كما هو؛ Relay لا يفك التشفير ولا يطبّق الحزمة.</p>
+            <Input value={targetNodeId} onChange={(event) => setTargetNodeId(event.target.value)} placeholder="Node ID للوجهة" dir="ltr" />
             <Input type="file" accept=".dme-sync,application/octet-stream" onChange={(event) => setManualFile(event.target.files?.[0] ?? null)} />
             <Button className="w-full" onClick={uploadManualFile} disabled={busy || !manualFile}>رفع إلى Relay</Button>
           </CardContent>
@@ -397,8 +516,8 @@ export function SyncPage() {
           <CardContent className="space-y-3">
             {conflicts.length === 0 && <p className="text-sm text-muted-foreground">لا توجد تعارضات مفتوحة.</p>}
             {conflicts.map(({ conflict, change }) => (
-              <div key={conflict.id} className="rounded border p-3">
-                <div className="flex items-center justify-between gap-2"><strong>{conflict.conflictCode}</strong><Badge variant={conflict.severity === "critical" || conflict.severity === "high" ? "destructive" : "secondary"}>{conflict.severity}</Badge></div>
+              <div key={conflict.id} className={`rounded border p-3 ${conflict.severity === "critical" || conflict.severity === "high" ? "border-destructive/40 bg-destructive/5" : conflict.severity === "medium" ? "border-amber-500/40 bg-amber-500/5" : "bg-muted/20"}`}>
+                <div className="flex items-center justify-between gap-2"><strong>{conflict.conflictCode}</strong><Badge variant={conflict.severity === "critical" || conflict.severity === "high" ? "destructive" : "secondary"}>{conflict.severity === "critical" ? "حرج" : conflict.severity === "high" ? "مرتفع" : conflict.severity === "medium" ? "متوسط" : "منخفض"}</Badge></div>
                 <p className="mt-1 text-xs text-muted-foreground">{change?.entityType} · {change?.entityGlobalId}</p>
                 <div className="mt-3 flex gap-2">
                   <Button size="sm" onClick={() => resolveConflict(conflict.id, "approve")} disabled={busy}>اعتماد</Button>
@@ -410,6 +529,29 @@ export function SyncPage() {
           </CardContent>
         </Card>
       </div>
+
+      {lastSyncAt && (
+        <p className="text-xs text-muted-foreground">
+          آخر تبادل ناجح: {formatDate(lastSyncAt)} — ACK مؤكد
+        </p>
+      )}
+
+      <AlertDialog open={confirmImportOpen} onOpenChange={setConfirmImportOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تطبيق حزمة المزامنة؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيقرأ النظام الحزمة محليًا ويطبق التغييرات المقبولة فقط، مع إبقاء التكرارات والتعارضات في التقرير. لا تتابع إلا إذا كان اتجاه النقل والملف المقصود صحيحين.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmImportPackage()} disabled={busy}>
+              تطبيق الحزمة
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

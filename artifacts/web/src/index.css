@@ -356,6 +356,29 @@
   }
 }
 
+@media screen and (max-width: 640px) {
+  /* Keep the A4 preview usable on phones; the paper can still be printed as A4. */
+  .print-document .print-sheet {
+    width: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .print-document .print-sheet > div {
+    padding: 1.25rem !important;
+  }
+
+  .print-document .print-sheet table {
+    font-size: 0.75rem !important;
+  }
+
+  .print-document .print-sheet td,
+  .print-document .print-sheet th {
+    padding: 0.4rem !important;
+  }
+}
+
 /* Utilities for elevated states */
 @layer utilities {
   input[type='search']::-webkit-search-cancel-button { @apply hidden; }

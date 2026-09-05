@@ -1,6 +1,6 @@
 import { useRoute, useLocation } from 'wouter';
 import { useGetTransactionPrint } from '@workspace/api-client-react';
-import { Printer, ArrowRight, FileDown } from 'lucide-react';
+import { Printer, ArrowRight, FileDown, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDateTime } from '@/lib/utils';
 import logoUrl from '@assets/logo.jpeg';
@@ -12,7 +12,7 @@ export function PrintTransactionPage() {
   const [, setLocation] = useLocation();
   const id = params?.id ? parseInt(params.id) : 0;
 
-  const { data, isLoading, isError } = useGetTransactionPrint(id);
+  const { data, isLoading, isError, refetch } = useGetTransactionPrint(id);
 
   if (isLoading) {
     return (
@@ -29,10 +29,16 @@ export function PrintTransactionPage() {
     return (
       <div className="flex flex-col h-screen items-center justify-center gap-4 bg-gray-100">
         <p className="text-red-600 text-lg font-medium">لم يتم العثور على السند</p>
-        <Button onClick={() => setLocation('/transactions')} variant="outline">
-          <ArrowRight className="ml-2 h-4 w-4" />
-          العودة لسجل العمليات
-        </Button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button onClick={() => void refetch()} variant="outline">
+            <RefreshCw className="ml-2 h-4 w-4" />
+            إعادة المحاولة
+          </Button>
+          <Button onClick={() => setLocation('/transactions')} variant="outline">
+            <ArrowRight className="ml-2 h-4 w-4" />
+            العودة لسجل العمليات
+          </Button>
+        </div>
       </div>
     );
   }
