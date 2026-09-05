@@ -126,6 +126,14 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('ar-SY', { day: 'numeric', month: 'short' });
 }
 
+function formatNumber(value: number | null | undefined): string {
+  return Number(value ?? 0).toLocaleString('ar-SY');
+}
+
+function formatUnit(value: number | null | undefined): string {
+  return `${formatNumber(value)} وحدة`;
+}
+
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 interface KpiCardProps {
@@ -152,7 +160,7 @@ function KpiCard({ title, value, icon, sub, variant = 'default', href, loading }
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-foreground/80">{title}</CardTitle>
         <div className={cn('p-1.5 rounded-md', variant !== 'default' ? variantStyles.card : 'bg-muted/50')}>
-          <span className={variantStyles.icon}>{icon}</span>
+          <span className={variantStyles.icon} aria-hidden="true">{icon}</span>
         </div>
       </CardHeader>
       <CardContent>
@@ -165,13 +173,32 @@ function KpiCard({ title, value, icon, sub, variant = 'default', href, loading }
           <>
             <div className={cn('text-2xl font-bold tabular-nums', variantStyles.value)}>{value}</div>
             {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
+            {variant === 'warning' && (
+              <div className="mt-2 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+                يحتاج انتباهاً
+              </div>
+            )}
+            {variant === 'danger' && (
+              <div className="mt-2 flex items-center gap-1 text-xs font-medium text-destructive">
+                <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+                حالة حرجة
+              </div>
+            )}
           </>
         )}
       </CardContent>
     </Card>
   );
 
-  return href ? <Link href={href}>{inner}</Link> : inner;
+  return href ? (
+    <Link
+      href={href}
+      aria-label={`${title}: ${typeof value === 'string' ? value : formatNumber(value)}`}
+    >
+      {inner}
+    </Link>
+  ) : inner;
 }
 
 // ─── Recent Transactions Table ─────────────────────────────────────────────────
@@ -189,7 +216,17 @@ const TX_TYPE_META = {
   adjust: { label: 'تسوية',   icon: <RefreshCw className="w-3 h-3" />,        color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
 } as const;
 
-function RecentTransactionsTable({ transactions, loading }: { transactions: RecentTransaction[]; loading: boolean }) {
+function RecentTransactionsTable({
+  transactions,
+  loading,
+  error = false,
+  onRetry,
+}: {
+  transactions: RecentTransaction[];
+  loading: boolean;
+  error?: boolean;
+  onRetry?: () => void;
+}) {
   const [, setLocation] = useLocation();
 
   const title = loading
@@ -202,8 +239,8 @@ function RecentTransactionsTable({ transactions, loading }: { transactions: Rece
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-3 flex flex-row items-center justify-between">
         <CardTitle className="text-base">{title}</CardTitle>
-        <Link href="/transactions">
-          <span className="text-xs text-primary hover:underline cursor-pointer">عرض الكل ←</span>
+        <Link href="/transactions" className="text-xs text-primary hover:underline">
+          عرض الكل ←
         </Link>
       </CardHeader>
       <CardContent className="flex-1 p-0">
@@ -216,6 +253,16 @@ function RecentTransactionsTable({ transactions, loading }: { transactions: Rece
                 <div className="h-5 w-16 bg-muted rounded" />
               </div>
             ))}
+          </div>
+        ) : error && transactions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <ShieldAlert className="h-8 w-8 text-destructive/70" aria-hidden="true" />
+            <p className="text-sm text-muted-foreground">تعذر تحميل أحدث العمليات.</p>
+            {onRetry && (
+              <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                إعادة تحميل العمليات
+              </Button>
+            )}
           </div>
         ) : transactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -236,11 +283,11 @@ function RecentTransactionsTable({ transactions, loading }: { transactions: Rece
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setLocation(tx.documentNumber ? `/transactions?search=${encodeURIComponent(tx.documentNumber)}` : '/transactions'); }}
                 >
                   <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium shrink-0', meta.color)}>
-                    {meta.icon}{meta.label}
+                    <span aria-hidden="true">{meta.icon}</span>{meta.label}
                   </span>
                   <span className="flex-1 text-sm font-medium truncate">{tx.name}</span>
                   {tx.quantity !== null && (
-                    <span className="text-sm tabular-nums text-muted-foreground shrink-0">{tx.quantity}</span>
+                    <span className="text-sm tabular-nums text-muted-foreground shrink-0">{formatNumber(tx.quantity)}</span>
                   )}
                   <div
                     className="text-right shrink-0"
@@ -263,6 +310,55 @@ function RecentTransactionsTable({ transactions, loading }: { transactions: Rece
 }
 
 // ─── Last-updated ticker ──────────────────────────────────────────────────────
+
+function DashboardSectionError({
+  section,
+  onRetry,
+}: {
+  section: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+      role="alert"
+    >
+      <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span>تعذر تحميل {section}.</span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-7 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+        onClick={onRetry}
+      >
+        إعادة المحاولة
+      </Button>
+    </div>
+  );
+}
+
+function ChartDataTable({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <details className="mt-3 rounded-md border bg-muted/20 text-sm">
+      <summary className="cursor-pointer px-3 py-2 font-medium text-foreground hover:bg-muted/40">
+        عرض جدول البيانات
+        <span className="sr-only">: {label}</span>
+      </summary>
+      <div className="overflow-x-auto border-t">
+        <table className="w-full min-w-[420px] text-right">
+          {children}
+        </table>
+      </div>
+    </details>
+  );
+}
 
 function LastUpdated({ fetchedAt }: { fetchedAt: Date | null }) {
   const [, setTick] = useState(0);
@@ -309,7 +405,7 @@ export function DashboardPage() {
 
   // Track last successful fetch
   useEffect(() => {
-    if (stats && charts) setFetchedAt(new Date());
+    if (stats || charts) setFetchedAt(new Date());
   }, [stats, charts]);
 
   const isRefreshing = statsFetching || chartsFetching;
@@ -340,7 +436,7 @@ export function DashboardPage() {
               title="تحديث البيانات"
               aria-label="تحديث البيانات"
             >
-              <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
+              <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -350,13 +446,13 @@ export function DashboardPage() {
           <div className="flex items-center gap-2 shrink-0">
             <Link href="/transactions/in/new">
               <Button size="sm" variant="outline" className="gap-1.5 text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30">
-                <ArrowDownToLine className="h-3.5 w-3.5" />
+                <ArrowDownToLine className="h-3.5 w-3.5" aria-hidden="true" />
                 إدخال مواد
               </Button>
             </Link>
             <Link href="/transactions/out/new">
               <Button size="sm" variant="outline" className="gap-1.5 text-red-600 border-red-300 hover:bg-red-50 dark:hover:bg-red-950/30">
-                <ArrowUpFromLine className="h-3.5 w-3.5" />
+                <ArrowUpFromLine className="h-3.5 w-3.5" aria-hidden="true" />
                 إخراج مواد
               </Button>
             </Link>
@@ -364,15 +460,9 @@ export function DashboardPage() {
         )}
       </div>
 
-      {/* ── Error banner ── */}
-      {(statsError || chartsError) && (
-        <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          <ShieldAlert className="h-4 w-4 shrink-0" />
-          <span>تعذّر تحميل بيانات لوحة التحكم. يتم عرض آخر بيانات متاحة — </span>
-          <button onClick={handleRefresh} className="underline hover:no-underline font-medium">
-            إعادة المحاولة
-          </button>
-        </div>
+      {/* Each data source reports its own failure and retry action. */}
+      {statsError && (
+        <DashboardSectionError section="المؤشرات وأحدث العمليات" onRetry={() => void refetchStats()} />
       )}
 
       {/* ── KPI Row 1: Stock status ── */}
@@ -380,7 +470,7 @@ export function DashboardPage() {
         <KpiCard
           loading={statsLoading}
           title="إجمالي الأصناف"
-          value={stats?.totalItems ?? 0}
+          value={stats ? formatNumber(stats.totalItems) : '—'}
           icon={<Package className="h-4 w-4" />}
           sub="صنف نشط في المستودع"
           href="/items"
@@ -388,27 +478,27 @@ export function DashboardPage() {
         <KpiCard
           loading={statsLoading}
           title="نواقص المخزون"
-          value={stats?.belowMinCount ?? 0}
+          value={stats ? formatNumber(stats.belowMinCount) : '—'}
           icon={<TrendingDown className="h-4 w-4" />}
-          sub={stats?.belowMinCount ? 'أصناف دون الحد الأدنى' : 'المخزون ضمن الحدود'}
+          sub={stats ? (stats.belowMinCount ? 'أصناف دون الحد الأدنى' : 'المخزون ضمن الحدود') : 'البيانات غير متاحة'}
           variant={belowMinVariant}
           href="/reports?tab=below-min"
         />
         <KpiCard
           loading={statsLoading}
           title="نفدت من المخزون"
-          value={stats?.zeroStockCount ?? 0}
+          value={stats ? formatNumber(stats.zeroStockCount) : '—'}
           icon={<BoxSelect className="h-4 w-4" />}
-          sub={stats?.zeroStockCount ? 'أصناف بكمية صفر' : 'لا توجد أصناف نافدة'}
+          sub={stats ? (stats.zeroStockCount ? 'أصناف بكمية صفر' : 'لا توجد أصناف نافدة') : 'البيانات غير متاحة'}
           variant={zeroStockVariant}
           href="/items"
         />
         <KpiCard
           loading={statsLoading}
           title={`عمليات ${monthName}`}
-           value={Number(stats?.monthlyIn ?? 0) + Number(stats?.monthlyOut ?? 0)}
+           value={stats ? formatNumber(Number(stats.monthlyIn ?? 0) + Number(stats.monthlyOut ?? 0)) : '—'}
           icon={<ArrowRightLeft className="h-4 w-4" />}
-          sub={stats ? (() => {
+           sub={stats ? (() => {
              const curr = Number(stats.monthlyIn ?? 0) + Number(stats.monthlyOut ?? 0);
              const prev = Number(stats.prevMonthIn ?? 0) + Number(stats.prevMonthOut ?? 0);
             const diff = curr - prev;
@@ -416,8 +506,8 @@ export function DashboardPage() {
             return (
               <span className="flex flex-col gap-0.5">
                 <span className="flex gap-2">
-                   <span className="text-emerald-600">↓ {Number(stats.monthlyIn ?? 0)} إدخال</span>
-                   <span className="text-red-500">↑ {Number(stats.monthlyOut ?? 0)} إخراج</span>
+                    <span className="text-emerald-600">↓ {formatNumber(stats.monthlyIn)} إدخال</span>
+                    <span className="text-red-500">↑ {formatNumber(stats.monthlyOut)} إخراج</span>
                 </span>
                 {pct !== null && (
                   <span className={diff >= 0 ? 'text-emerald-600' : 'text-red-500'}>
@@ -437,35 +527,35 @@ export function DashboardPage() {
         <KpiCard
           loading={statsLoading}
           title="قرب انتهاء الصلاحية"
-          value={stats?.nearExpiryCount ?? 0}
+          value={stats ? formatNumber(stats.nearExpiryCount) : '—'}
           icon={<Clock className="h-4 w-4" />}
-          sub={stats ? `خلال ${formatDays(stats.expiryAlertDays)} القادمة` : '—'}
+          sub={stats ? `خلال ${formatDays(stats.expiryAlertDays)} القادمة` : 'البيانات غير متاحة'}
           variant={nearExpiryVariant}
           href="/reports?tab=expiry"
         />
         <KpiCard
           loading={statsLoading}
           title="منتهية الصلاحية"
-          value={stats?.expiredCount ?? 0}
+          value={stats ? formatNumber(stats.expiredCount) : '—'}
           icon={<ShieldAlert className="h-4 w-4" />}
-          sub={stats?.expiredCount ? 'تحتاج إزالة فورية' : 'لا يوجد منتهي الصلاحية'}
+          sub={stats ? (stats.expiredCount ? 'تحتاج إزالة فورية' : 'لا يوجد منتهي الصلاحية') : 'البيانات غير متاحة'}
           variant={expiredVariant}
           href="/reports?tab=expiry"
         />
         <KpiCard
           loading={statsLoading}
           title="إجمالي التجهيزات"
-          value={stats?.totalEquipment ?? 0}
+          value={stats ? formatNumber(stats.totalEquipment) : '—'}
           icon={<Stethoscope className="h-4 w-4" />}
-          sub={stats?.totalEquipment ? 'جهاز ومعدة مسجّلة' : 'لا توجد تجهيزات مسجّلة'}
+          sub={stats ? (stats.totalEquipment ? 'جهاز ومعدة مسجّلة' : 'لا توجد تجهيزات مسجّلة') : 'البيانات غير متاحة'}
           href="/equipment"
         />
         <KpiCard
           loading={statsLoading}
           title="تجهيزات تحتاج انتباهاً"
-          value={stats?.equipmentAlertCount ?? 0}
+          value={stats ? formatNumber(stats.equipmentAlertCount) : '—'}
           icon={<Wrench className="h-4 w-4" />}
-          sub="صيانة / فحص / معطلة"
+          sub={stats ? 'صيانة / فحص / معطلة' : 'البيانات غير متاحة'}
           variant={equipAlertVariant}
           href="/equipment"
         />
@@ -477,6 +567,8 @@ export function DashboardPage() {
           <RecentTransactionsTable
             transactions={stats?.recentTransactions ?? []}
             loading={statsLoading}
+            error={statsError}
+            onRetry={() => void refetchStats()}
           />
         </div>
 
@@ -487,7 +579,9 @@ export function DashboardPage() {
             <p className="text-xs text-muted-foreground">إجمالي الوحدات لكل تصنيف</p>
           </CardHeader>
           <CardContent>
-            {chartsLoading ? (
+            {chartsError ? (
+              <DashboardSectionError section="توزيع المخزون" onRetry={() => void refetchCharts()} />
+            ) : chartsLoading ? (
               <div className="h-60 flex items-center justify-center">
                 <div className="h-32 w-32 rounded-full border-4 border-muted animate-pulse" />
               </div>
@@ -499,43 +593,65 @@ export function DashboardPage() {
                 </div>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={240} aria-label="مخطط دائري يوضح توزيع المخزون حسب التصنيف">
-                <PieChart>
-                  <Pie
-                    data={charts.stockByCategory}
-                    cx="50%"
-                    cy="42%"
-                    outerRadius={75}
-                    innerRadius={30}
-                    dataKey="totalStock"
-                    nameKey="category"
-                    paddingAngle={2}
-                  >
-                    {charts.stockByCategory.map((_: unknown, i: number) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    content={(props: TooltipProps<number, string>) => (
-                      <ChartTooltip
-                        {...props}
-                        itemFormatter={(v, name, entry) => [
-                          `${v.toLocaleString('ar')} وحدة (${(entry as { payload?: { itemCount?: number } }).payload?.itemCount ?? 0} صنف)`,
-                          name,
-                        ]}
+              <>
+                <div className="min-w-0 overflow-x-auto">
+                  <ResponsiveContainer width="100%" height={240} aria-label="مخطط دائري يوضح توزيع المخزون حسب التصنيف">
+                    <PieChart>
+                      <Pie
+                        data={charts.stockByCategory}
+                        cx="50%"
+                        cy="42%"
+                        outerRadius={75}
+                        innerRadius={30}
+                        dataKey="totalStock"
+                        nameKey="category"
+                        paddingAngle={2}
+                      >
+                        {charts.stockByCategory.map((_: unknown, i: number) => (
+                          <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        content={(props: TooltipProps<number, string>) => (
+                          <ChartTooltip
+                            {...props}
+                            itemFormatter={(v, name, entry) => [
+                              `${formatUnit(v)} (${formatNumber((entry as { payload?: { itemCount?: number } }).payload?.itemCount)} صنف)`,
+                              name,
+                            ]}
+                          />
+                        )}
                       />
-                    )}
-                  />
-                  <Legend
-                    verticalAlign="bottom"
-                    iconSize={8}
-                    wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }}
-                    formatter={(value) => (
-                      <span className="text-foreground">{value}</span>
-                    )}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                      <Legend
+                        verticalAlign="bottom"
+                        iconSize={8}
+                        wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }}
+                        formatter={(value) => (
+                          <span className="text-foreground">{value}</span>
+                        )}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <ChartDataTable label="توزيع المخزون حسب التصنيف">
+                  <thead className="bg-muted/40 text-xs text-muted-foreground">
+                    <tr>
+                      <th scope="col" className="px-3 py-2">التصنيف</th>
+                      <th scope="col" className="px-3 py-2">الوحدات</th>
+                      <th scope="col" className="px-3 py-2">الأصناف</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {charts.stockByCategory.map((row) => (
+                      <tr key={row.category}>
+                        <th scope="row" className="px-3 py-2 font-medium">{row.category}</th>
+                        <td className="px-3 py-2 tabular-nums">{formatUnit(row.totalStock)}</td>
+                        <td className="px-3 py-2 tabular-nums">{formatNumber(row.itemCount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </ChartDataTable>
+              </>
             )}
           </CardContent>
         </Card>
@@ -562,7 +678,9 @@ export function DashboardPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {chartsLoading ? (
+          {chartsError ? (
+            <DashboardSectionError section="حركة المستودع اليومية" onRetry={() => void refetchCharts()} />
+          ) : chartsLoading ? (
             <div className="h-52 animate-pulse bg-muted/30 rounded-lg" />
           ) : !charts?.dailyMovement?.some(d => d.inQty > 0 || d.outQty > 0) ? (
             // generate_series always returns 30 rows; check actual movement instead of length
@@ -573,62 +691,86 @@ export function DashboardPage() {
               </div>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={200} aria-label="مخطط مساحي يوضح حركة المستودع اليومية خلال آخر 30 يوماً">
-              <AreaChart data={charts.dailyMovement} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorIn" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorOut" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis
-                  dataKey="day"
-                  tick={{ fontSize: 10 }}
-                  stroke="hsl(var(--muted-foreground))"
-                  tickLine={false}
-                  axisLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tick={{ fontSize: 10 }}
-                  stroke="hsl(var(--muted-foreground))"
-                  tickLine={false}
-                  axisLine={false}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  content={(props: TooltipProps<number, string>) => (
-                    <ChartTooltip
-                      {...props}
-                      itemFormatter={(v, key) => [`${v} وحدة`, key === 'inQty' ? 'إدخال' : 'إخراج']}
+            <>
+              <div className="min-w-0 overflow-x-auto">
+                <ResponsiveContainer width="100%" height={200} aria-label="مخطط مساحي يوضح حركة المستودع اليومية خلال آخر 30 يوماً">
+                  <AreaChart data={charts.dailyMovement} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorIn" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorOut" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis
+                      dataKey="day"
+                      tick={{ fontSize: 10 }}
+                      stroke="hsl(var(--muted-foreground))"
+                      tickLine={false}
+                      axisLine={false}
+                      interval="preserveStartEnd"
                     />
-                  )}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="inQty"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  fill="url(#colorIn)"
-                  dot={false}
-                  activeDot={{ r: 3 }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="outQty"
-                  stroke="#ef4444"
-                  strokeWidth={2}
-                  fill="url(#colorOut)"
-                  dot={false}
-                  activeDot={{ r: 3 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+                    <YAxis
+                      tick={{ fontSize: 10 }}
+                      stroke="hsl(var(--muted-foreground))"
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      content={(props: TooltipProps<number, string>) => (
+                        <ChartTooltip
+                          {...props}
+                          itemFormatter={(v, key) => [formatUnit(v), key === 'inQty' ? 'إدخال' : 'إخراج']}
+                        />
+                      )}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="inQty"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      fill="url(#colorIn)"
+                      dot={false}
+                      activeDot={{ r: 3 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="outQty"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      fill="url(#colorOut)"
+                      dot={false}
+                      activeDot={{ r: 3 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              <ChartDataTable label="حركة المستودع اليومية">
+                <thead className="bg-muted/40 text-xs text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-3 py-2">اليوم</th>
+                    <th scope="col" className="px-3 py-2">إدخال</th>
+                    <th scope="col" className="px-3 py-2">إخراج</th>
+                    <th scope="col" className="px-3 py-2">العمليات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {charts.dailyMovement.map((row) => (
+                    <tr key={row.day}>
+                      <th scope="row" className="px-3 py-2 font-medium">{row.day}</th>
+                      <td className="px-3 py-2 tabular-nums">{formatUnit(row.inQty)}</td>
+                      <td className="px-3 py-2 tabular-nums">{formatUnit(row.outQty)}</td>
+                      <td className="px-3 py-2 tabular-nums">{formatNumber(row.txCount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </ChartDataTable>
+            </>
           )}
         </CardContent>
       </Card>
@@ -654,7 +796,9 @@ export function DashboardPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {chartsLoading ? (
+          {chartsError ? (
+            <DashboardSectionError section="الأصناف الأكثر نشاطاً" onRetry={() => void refetchCharts()} />
+          ) : chartsLoading ? (
             <div className="h-64 animate-pulse bg-muted/30 rounded-lg" />
           ) : !charts?.topItems?.length ? (
             <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
@@ -664,43 +808,65 @@ export function DashboardPage() {
               </div>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={Math.max(320, (charts.topItems.length) * 52)} aria-label="مخطط أعمدة أفقي يوضح أعلى الأصناف نشاطاً خلال آخر 30 يوماً">
-              <BarChart
-                data={charts.topItems}
-                layout="vertical"
-                margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
-                barCategoryGap="25%"
-                barGap={2}
-              >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 11 }}
-                  stroke="hsl(var(--muted-foreground))"
-                  tickLine={false}
-                  axisLine={false}
-                  allowDecimals={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={130}
-                  tick={{ fontSize: 11, fill: 'hsl(var(--foreground))' }}
-                  stroke="transparent"
-                  tickLine={false}
-                />
-                <Tooltip
-                  content={(props: TooltipProps<number, string>) => (
-                    <ChartTooltip
-                      {...props}
-                      itemFormatter={(v, key) => [`${v} وحدة`, key === 'inQty' ? 'إدخال' : 'إخراج']}
+            <>
+              <div className="min-w-0 overflow-x-auto">
+                <ResponsiveContainer width="100%" height={Math.max(320, charts.topItems.length * 52)} aria-label="مخطط أعمدة أفقي يوضح أعلى الأصناف نشاطاً خلال آخر 30 يوماً">
+                  <BarChart
+                    data={charts.topItems}
+                    layout="vertical"
+                    margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
+                    barCategoryGap="25%"
+                    barGap={2}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                    <XAxis
+                      type="number"
+                      tick={{ fontSize: 11 }}
+                      stroke="hsl(var(--muted-foreground))"
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
                     />
-                  )}
-                />
-                <Bar dataKey="inQty"  fill="#10b981" radius={[0, 3, 3, 0]} name="إدخال" />
-                <Bar dataKey="outQty" fill="#f87171" radius={[0, 3, 3, 0]} name="إخراج" />
-              </BarChart>
-            </ResponsiveContainer>
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={130}
+                      tick={{ fontSize: 11, fill: 'hsl(var(--foreground))' }}
+                      stroke="transparent"
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      content={(props: TooltipProps<number, string>) => (
+                        <ChartTooltip
+                          {...props}
+                          itemFormatter={(v, key) => [formatUnit(v), key === 'inQty' ? 'إدخال' : 'إخراج']}
+                        />
+                      )}
+                    />
+                    <Bar dataKey="inQty" fill="#10b981" radius={[0, 3, 3, 0]} name="إدخال" />
+                    <Bar dataKey="outQty" fill="#f87171" radius={[0, 3, 3, 0]} name="إخراج" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <ChartDataTable label="الأصناف الأكثر نشاطاً">
+                <thead className="bg-muted/40 text-xs text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-3 py-2">الصنف</th>
+                    <th scope="col" className="px-3 py-2">إدخال</th>
+                    <th scope="col" className="px-3 py-2">إخراج</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {charts.topItems.map((row) => (
+                    <tr key={row.name}>
+                      <th scope="row" className="px-3 py-2 font-medium">{row.name}</th>
+                      <td className="px-3 py-2 tabular-nums">{formatUnit(row.inQty)}</td>
+                      <td className="px-3 py-2 tabular-nums">{formatUnit(row.outQty)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </ChartDataTable>
+            </>
           )}
         </CardContent>
       </Card>
