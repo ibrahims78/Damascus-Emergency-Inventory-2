@@ -23,6 +23,7 @@ import {
   allocateBatchesFefo,
   assertEntityReference,
   assertIsoDate,
+  assertMeaningfulReason,
   assertNonEmpty,
   assertPositiveInteger,
   calculateEquipmentAvailable,
@@ -691,7 +692,7 @@ async function createDamage(
   documentNumber: string,
 ) {
   const quantity = assertPositiveInteger(input.quantity, "الكمية");
-  const reason = assertNonEmpty(input.reason, "سبب التلف");
+  const reason = assertMeaningfulReason(input.reason, "التلف");
   const damageDate = assertIsoDate(input.damageDate ?? input.documentDate ?? today(), "تاريخ التلف", true)!;
 
   if (entity.itemType === "item") {
@@ -897,7 +898,7 @@ async function createCentralReturn(
   documentNumber: string,
 ) {
   const quantity = assertPositiveInteger(input.quantity, "الكمية");
-  const reason = assertNonEmpty(input.reason, "سبب المرتجع");
+  const reason = assertMeaningfulReason(input.reason, "المرتجع");
   const condition = assertNonEmpty(input.returnCondition, "حالة المرتجع");
   const resolvedCondition = await resolveReturnCondition(tx, condition);
 

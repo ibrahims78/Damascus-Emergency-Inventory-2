@@ -20,13 +20,16 @@ import {
 } from '@/components/ui/form';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { isValidIsoDate } from '@/lib/inventory-validation';
 
 const schema = z.object({
   entityType: z.enum(['item', 'equipment']),
   itemId: z.coerce.number().optional().nullable(),
   equipmentId: z.coerce.number().optional().nullable(),
   newStock: z.coerce.number({ required_error: 'الكمية الصحيحة مطلوبة' }).min(0, 'الكمية لا يمكن أن تكون سالبة'),
-  documentDate: z.string().min(1, 'تاريخ الجرد مطلوب'),
+  documentDate: z.string()
+    .min(1, 'تاريخ الجرد مطلوب')
+    .refine(isValidIsoDate, 'تاريخ الجرد غير صالح'),
   reason: z.string().min(5, 'سبب التسوية مطلوب (5 أحرف على الأقل)'),
   notes: z.string().optional().nullable(),
 });

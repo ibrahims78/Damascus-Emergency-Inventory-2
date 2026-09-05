@@ -9,6 +9,7 @@ import {
   allocateBatchesFefo,
   assertEntityReference,
   assertIsoDate,
+  assertMeaningfulReason,
   assertNonEmpty,
   assertPositiveInteger,
   calculateEquipmentAvailable,
@@ -50,6 +51,16 @@ describe("assertNonEmpty", () => {
     expectError(() => assertNonEmpty("", "reason"), "REQUIRED_FIELD");
     expectError(() => assertNonEmpty("   ", "reason"), "REQUIRED_FIELD");
     expectError(() => assertNonEmpty(null, "reason"), "REQUIRED_FIELD");
+  });
+});
+
+describe("assertMeaningfulReason", () => {
+  it("trims and accepts a clear reason", () => {
+    expect(assertMeaningfulReason("  تلف مثبت  ", "التلف")).toBe("تلف مثبت");
+  });
+
+  it("rejects a too-short reason", () => {
+    expectError(() => assertMeaningfulReason("سبب", "التلف"), "REASON_TOO_SHORT");
   });
 });
 

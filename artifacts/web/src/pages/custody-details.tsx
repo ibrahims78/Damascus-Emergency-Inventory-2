@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { CopyButton } from '@/components/copy-button';
 
 type CustodyDetails = {
   custody: {
@@ -58,7 +59,7 @@ export function CustodyDetailsPage({ custodyId: providedId }: { custodyId?: numb
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Button variant="ghost" onClick={() => setLocation('/reports?tab=custodies')} className="mb-2 -mr-3 gap-2 print:hidden"><ArrowLeft className="h-4 w-4" /> العودة للعهد</Button>
-          <div className="flex items-center gap-3"><div className="rounded-xl bg-blue-100 p-3 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"><ShieldCheck className="h-6 w-6" /></div><div><h1 className="text-2xl font-bold tracking-tight">عهدة رقم {custody.id}</h1><p className="mt-1 text-sm text-muted-foreground">بطاقة دورة حياة العهدة وسجل التسليم والإعادة والفحص</p></div></div>
+          <div className="flex items-center gap-3"><div className="rounded-xl bg-blue-100 p-3 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"><ShieldCheck className="h-6 w-6" /></div><div><div className="flex items-center gap-1"><h1 className="text-2xl font-bold tracking-tight">عهدة رقم {custody.id}</h1><CopyButton value={String(custody.id)} label="رقم العهدة" /></div><p className="mt-1 text-sm text-muted-foreground">بطاقة دورة حياة العهدة وسجل التسليم والإعادة والفحص</p></div></div>
         </div>
          <div className="flex flex-wrap gap-2 print:hidden">
            {custody.outstandingQuantity > 0 && (
@@ -82,7 +83,7 @@ export function CustodyDetailsPage({ custodyId: providedId }: { custodyId?: numb
       <Card><CardHeader className="pb-4"><CardTitle className="text-base">بيانات العهدة والتجهيز</CardTitle><CardDescription>لقطات مستقلة محفوظة مع سند التسليم، مع رابط مباشر للتجهيز الأصلي.</CardDescription></CardHeader><CardContent className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <div><p className="text-xs text-muted-foreground">التجهيز</p><Link href={`/equipment/${equipment.id}`} className="mt-1 block font-medium text-primary hover:underline">{equipment.name}</Link><p className="text-xs text-muted-foreground">{[equipment.equipmentType, equipment.model, equipment.serialNumber].filter(Boolean).join(' · ') || 'بيانات تعريف غير مكتملة'}</p></div>
         <Info label="الحائز" value={custody.holderName} /><Info label="الجهة / الشخص المستلم" value={custody.recipientName} /><Info label="موقع العهدة" value={custody.location} />
-        <Info label="رقم مذكرة التسليم" value={custody.deliveryNoteNumber} /><Info label="تاريخ التسليم" value={dateOnly(custody.deliveryDate)} /><Info label="تاريخ الإعادة الأخير" value={dateOnly(data.returns.at(-1)?.returnDate)} /><Info label="الحالة" value={status.label} />
+         <div><p className="text-xs text-muted-foreground">رقم مذكرة التسليم</p><div className="mt-1 flex items-center gap-1"><p className="font-medium">{custody.deliveryNoteNumber || 'غير محدد'}</p><CopyButton value={custody.deliveryNoteNumber} label="رقم مذكرة التسليم" /></div></div><Info label="تاريخ التسليم" value={dateOnly(custody.deliveryDate)} /><Info label="تاريخ الإعادة الأخير" value={dateOnly(data.returns.at(-1)?.returnDate)} /><Info label="الحالة" value={status.label} />
       </CardContent></Card>
 
       <Card className="print:hidden">
@@ -98,7 +99,7 @@ export function CustodyDetailsPage({ custodyId: providedId }: { custodyId?: numb
               {data.returns.map((returned) => (
                 <div key={returned.id} className="grid gap-3 px-4 py-4 text-sm sm:grid-cols-[1fr_auto_auto] sm:items-start sm:px-6">
                   <div>
-                    <p className="font-semibold">{returned.documentNumber}</p>
+                    <div className="flex items-center gap-1"><p className="font-semibold">{returned.documentNumber}</p><CopyButton value={returned.documentNumber} label="رقم سند الإعادة" /></div>
                     <div className="mt-1 grid gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
                       <span>تاريخ الإعادة: {dateOnly(returned.returnDate)}</span>
                       <span>المكان: {returned.returnedToLocation || 'غير محدد'}</span>
@@ -134,7 +135,7 @@ export function CustodyDetailsPage({ custodyId: providedId }: { custodyId?: numb
                     <span className="text-xs text-muted-foreground">{dateOnly(event.date)}</span>
                   </div>
                   <div>
-                    <p className="font-semibold">{event.documentNumber}</p>
+                    <div className="flex items-center gap-1"><p className="font-semibold">{event.documentNumber}</p><CopyButton value={event.documentNumber} label="رقم السند" /></div>
                     <div className="mt-1 grid gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
                       <span>المنفذ: {event.operatorName || 'غير متوفر'}</span>
                       <span>المكان: {event.location || 'غير محدد'}</span>

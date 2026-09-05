@@ -56,6 +56,17 @@ export function assertNonEmpty(value: unknown, field: string): string {
   return normalized;
 }
 
+export function assertMeaningfulReason(value: unknown, field: string): string {
+  const normalized = assertNonEmpty(value, field);
+  if (normalized.length < 5) {
+    throw new InventoryMovementError(
+      "REASON_TOO_SHORT",
+      `سبب ${field} قصير جدًا (5 أحرف على الأقل)`,
+    );
+  }
+  return normalized;
+}
+
 export function assertIsoDate(
   value: unknown,
   field: string,

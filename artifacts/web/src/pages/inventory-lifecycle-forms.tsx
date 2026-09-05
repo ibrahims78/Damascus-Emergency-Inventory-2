@@ -36,6 +36,8 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { CopyButton } from '@/components/copy-button';
+import { isValidIsoDate, validateExceptionMovement } from '@/lib/inventory-validation';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const DEFAULT_RETURN_CONDITIONS = [
@@ -283,6 +285,7 @@ export function CustodyOutForm() {
   const [location, setLocationValue] = useState('');
   const [notes, setNotes] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
   const selectedEquipment = equipmentData?.equipment.find((equipment) => equipment.id === equipmentId);
   const openCustodyQuantity = selectedEquipment
     ? (custodies ?? [])
@@ -300,8 +303,8 @@ export function CustodyOutForm() {
       toast.error('يرجى تعبئة التجهيز والمستلم ورقم المذكرة والمكان');
       return;
     }
-    if (!date) {
-      toast.error('يرجى اختيار تاريخ التسليم');
+    if (!isValidIsoDate(date)) {
+      toast.error('يرجى اختيار تاريخ تسليم صالح');
       return;
     }
     if (!Number.isSafeInteger(quantity) || quantity < 1 || (equipmentAvailable !== null && quantity > equipmentAvailable)) {
@@ -342,10 +345,21 @@ export function CustodyOutForm() {
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="اسم المستلم" required><Input value={holderName} onChange={(e) => { setHolderName(e.target.value); setConfirming(false); }} placeholder="اسم الموظف أو المسؤول" /></Field>
           <Field label="الجهة / المستلم المسجل">
-            <Select value={recipientId ? String(recipientId) : ''} onValueChange={(value) => setRecipientId(Number(value))}>
-              <SelectTrigger><SelectValue placeholder="اختياري — اختر من القائمة" /></SelectTrigger>
-              <SelectContent>{recipients?.map((recipient) => <SelectItem key={recipient.id} value={String(recipient.id)}>{recipient.name}</SelectItem>)}</SelectContent>
-            </Select>
+            <CatalogCombobox
+              value={recipientId ? String(recipientId) : ''}
+              open={recipientPickerOpen}
+              onOpenChange={setRecipientPickerOpen}
+              onValueChange={(value) => { setRecipientId(Number(value)); setConfirming(false); }}
+              placeholder="اختياري — اختر من القائمة"
+              searchPlaceholder="ابحث باسم الجهة أو المستلم..."
+              emptyMessage="لا توجد جهة مستلمة مطابقة"
+              loading={!recipients}
+              options={(recipients ?? []).map((recipient) => ({
+                value: String(recipient.id),
+                searchValue: `${recipient.id} ${recipient.name}`,
+                label: recipient.name,
+              }))}
+            />
           </Field>
           <Field label="رقم مذكرة تسليم العهدة" required><Input value={noteNumber} onChange={(e) => { setNoteNumber(e.target.value); setConfirming(false); }} /></Field>
           <Field label="تاريخ التسليم" required><Input type="date" value={date} onChange={(e) => { setDate(e.target.value); setConfirming(false); }} /></Field>
@@ -377,6 +391,13 @@ export function CustodyOutForm() {
           <Field label="مكان العهدة" required><Input value={location} onChange={(e) => { setLocationValue(e.target.value); setConfirming(false); }} placeholder="مثال: سيارة الإسعاف 12" /></Field>
         </div>
         <Field label="ملاحظات"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-24" /></Field>
+         {selectedEquipment && (
+           <div role="status" aria-live="polite" className="grid gap-2 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm sm:grid-cols-3">
+             <div><span className="text-muted-foreground">التجهيز</span><p className="font-semibold">{selectedEquipment.name}</p></div>
+             <div><span className="text-muted-foreground">المتاح قبل التسليم</span><p className="font-semibold">{equipmentAvailable ?? 0}</p></div>
+             <div><span className="text-muted-foreground">المتاح بعد التسليم</span><p className="font-semibold">{Math.max(0, (equipmentAvailable ?? 0) - quantity)}</p></div>
+           </div>
+         )}
       </FormCard>
     </PageFrame>
   );
@@ -447,7 +468,7 @@ export function CustodyReturnForm() {
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selected || !returnedToLocation.trim() || quantity < 1 || quantity > selected.outstandingQuantity) {
+    if (!selected || !returnedToLocation.trim() || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > selected.outstandingQuantity) {
       const message = selected
         ? !returnedToLocation.trim()
           ? 'أدخل المكان الذي عادت إليه العهدة'
@@ -455,6 +476,11 @@ export function CustodyReturnForm() {
         : 'اختر عهدة مفتوحة ومكان الإعادة';
       setValidationError(message);
       toast.error(message);
+      return;
+    }
+    if (!isValidIsoDate(date)) {
+      setValidationError('تاريخ الإعادة غير صالح');
+      toast.error('تاريخ الإعادة غير صالح');
       return;
     }
     setValidationError('');
@@ -498,7 +524,7 @@ export function CustodyReturnForm() {
              لا توجد عهدة مفتوحة قابلة للإعادة حاليًا. يجب تسجيل تسليم عهدة أولًا أو تحديث الصفحة بعد تسجيل التسليم.
            </div>
          )}
-        {selected && <div className="flex flex-wrap gap-2 rounded-lg bg-muted/40 p-3 text-sm"><Badge variant="outline">السند: {selected.deliveryNoteNumber}</Badge><Badge variant="outline">المكان: {selected.location}</Badge><Badge variant="secondary">المتبقي: {selected.outstandingQuantity}</Badge></div>}
+         {selected && <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 p-3 text-sm"><Badge variant="outline">السند: {selected.deliveryNoteNumber}</Badge><CopyButton value={selected.deliveryNoteNumber} label="رقم مذكرة العهدة" /><Badge variant="outline">المكان: {selected.location}</Badge><Badge variant="secondary">المتبقي: {selected.outstandingQuantity}</Badge></div>}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="الكمية المعادة" required><Input type="number" min={1} max={selected?.outstandingQuantity ?? 1} value={quantity} onChange={(e) => { setQuantity(e.target.valueAsNumber || 1); setConfirming(false); }} /></Field>
           <Field label="حالة الصنف عند الإعادة" required>
@@ -539,18 +565,37 @@ function MovementEntityForm({
   const [confirming, setConfirming] = useState(false);
   const [validationError, setValidationError] = useState('');
   const pending = damageMutation.isPending || returnMutation.isPending;
+  const { data: itemsData } = useListItems({ limit: 5000 });
+  const { data: equipmentData } = useListEquipment({ limit: 5000 });
+  const { data: custodies } = useListCustodies();
+  const selectedItem = type === 'item' ? itemsData?.items.find((item) => item.id === itemId) : undefined;
+  const selectedEquipment = type === 'equipment' ? equipmentData?.equipment.find((equipment) => equipment.id === equipmentId) : undefined;
+  const openCustodyQuantity = selectedEquipment
+    ? (custodies ?? [])
+        .filter((custody) => custody.equipmentId === selectedEquipment.id && custody.outstandingQuantity > 0)
+        .reduce((total, custody) => total + custody.outstandingQuantity, 0)
+    : 0;
+  const available = selectedItem
+    ? selectedItem.currentStock
+    : selectedEquipment
+      ? Math.max(0, (selectedEquipment.quantity ?? 0) - openCustodyQuantity)
+      : null;
+  const selectedName = selectedItem?.name ?? selectedEquipment?.name;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     const selectedId = type === 'item' ? itemId : equipmentId;
-    if (!selectedId || quantity < 1 || !reason.trim() || !date) {
+    const movementValidation = validateExceptionMovement({
+      quantity,
+      date,
+      reason,
+      available,
+      serialised: Boolean(selectedEquipment?.serialNumber),
+    });
+    if (!selectedId || movementValidation) {
       const message = !selectedId
         ? 'يرجى اختيار مادة أو تجهيز أولاً'
-        : quantity < 1
-          ? 'يجب أن تكون الكمية أكبر من صفر'
-          : !reason.trim()
-            ? 'يرجى إدخال سبب المرتجع'
-            : 'يرجى اختيار تاريخ المرتجع';
+        : movementValidation ?? 'يرجى مراجعة البيانات';
       setValidationError(message);
       toast.error(message);
       return;
@@ -588,6 +633,16 @@ function MovementEntityForm({
       )}
       <FormCard onSubmit={submit} pending={pending} confirming={confirming} onCancelConfirm={() => setConfirming(false)} submitLabel={kind === 'damage' ? 'مراجعة وتسجيل التلف' : 'مراجعة وتسجيل المرتجع'}>
         <EntityPicker type={type} itemId={itemId} equipmentId={equipmentId} onTypeChange={(value) => { setType(value); setItemId(null); setEquipmentId(null); setConfirming(false); setValidationError(''); }} onItemChange={(id) => { setItemId(id); setConfirming(false); setValidationError(''); }} onEquipmentChange={(id) => { setEquipmentId(id); setConfirming(false); setValidationError(''); }} />
+         {selectedName && (
+           <div role="status" aria-live="polite" className="grid gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm sm:grid-cols-3">
+             <div><span className="text-muted-foreground">العنصر</span><p className="font-semibold">{selectedName}</p></div>
+             <div><span className="text-muted-foreground">الرصيد المتاح قبل العملية</span><p className="font-semibold">{available ?? 0}</p></div>
+             <div><span className="text-muted-foreground">الرصيد المتوقع بعد العملية</span><p className="font-semibold">{Math.max(0, (available ?? 0) - quantity)}</p></div>
+             {selectedEquipment && openCustodyQuantity > 0 && (
+               <div className="text-xs text-muted-foreground sm:col-span-3">العهد المفتوحة المحمية: {openCustodyQuantity}</div>
+             )}
+           </div>
+         )}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="الكمية" required><Input type="number" min={1} value={quantity} onChange={(e) => { setQuantity(e.target.valueAsNumber || 1); setConfirming(false); setValidationError(''); }} /></Field>
           <Field label={kind === 'damage' ? 'تاريخ التلف' : 'تاريخ المرتجع'} required><Input type="date" value={date} onChange={(e) => { setDate(e.target.value); setConfirming(false); setValidationError(''); }} /></Field>
