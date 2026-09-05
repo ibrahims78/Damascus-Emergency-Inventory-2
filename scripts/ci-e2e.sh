@@ -5,9 +5,9 @@ set -euo pipefail
 
 export DAMASCUS_DESKTOP=1
 if [ -z "${SEED_ADMIN_PASSWORD-}" ]; then
-  # Deliberately local-only credentials for isolated CI databases. Never reuse
-  # this value for a deployed or shared environment.
-  SEED_ADMIN_PASSWORD='LocalTest!2026Inventory'
+  # Generate a local-only password for each isolated run. Never reuse it for
+  # a deployed or shared environment.
+  SEED_ADMIN_PASSWORD="$(node -e "process.stdout.write('LocalTest!2026-' + require('node:crypto').randomBytes(12).toString('base64url'))")"
 fi
 export SEED_ADMIN_PASSWORD
 export DAMASCUS_SCHEMA_PATH="$PWD/lib/db/desktop-schema.sql"
