@@ -29,10 +29,6 @@ const LICENSE_PUBLIC_KEY_CANDIDATES = [
     import.meta.dirname ?? process.cwd(),
     `../../../release-artifacts/${RELEASE_VERSION}/license-public-keys/windows.b64`,
   ),
-  path.resolve(
-    import.meta.dirname ?? process.cwd(),
-    "../../../release-artifacts/v4.0.0/license-public-keys/windows.b64",
-  ),
 ].filter((value): value is string => Boolean(value));
 
 function licensePublicKeyB64(): string {

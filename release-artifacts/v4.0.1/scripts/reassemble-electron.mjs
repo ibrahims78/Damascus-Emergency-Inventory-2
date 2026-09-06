@@ -2,8 +2,8 @@
 /**
  * Cross-platform Windows package reassembler.
  *
- * It reuses the signed Electron runtime from v4.0.0 and replaces only the
- * application archive with the current web/API build. The Windows executable
+ * It reuses the signed Electron runtime from the current release and replaces
+ * only the application archive with the current web/API build. The executable
  * itself still needs to be smoke-tested on Windows before distribution.
  */
 import { execFileSync } from "node:child_process";

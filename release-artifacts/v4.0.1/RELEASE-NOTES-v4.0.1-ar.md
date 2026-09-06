@@ -8,21 +8,17 @@
 - رفع رقم نسخة Android إلى `versionName=4.0.1` و`versionCode=401`.
 - استخدام حزمة الويب المحمية الصحيحة عند مزامنة Capacitor مع Android.
 - إصلاح تعارض اسم متغير alias في إعداد توقيع Gradle.
-- جعل مسارات مفاتيح التحقق قابلة للتحديد عبر `DAMASCUS_RELEASE_VERSION` مع إبقاء
-  مسار `v4.0.0` كحل توافق للحزم القديمة.
+- جعل مسار مفتاح التحقق قابلاً للتحديد عبر `DAMASCUS_RELEASE_VERSION` مع اعتماد
+  ملفات الإصدار الحالي فقط.
 - إصلاح سكربت إعادة تجميع Windows ليعمل من جذر المشروع بدلاً من مسار جهاز ثابت.
-- مولّدات التفعيل الجديدة تحمل اسم `v4.0.1`، بينما تبقى المفاتيح الخاصة خارج Git.
+- تبقى مفاتيح التوقيع الخاصة خارج Git، ولا تُوزّع أدوات إصدار التراخيص ضمن حزم المستخدم.
 
 ## الحزم
 
-ينبغي نشر هذه الملفات بعد نجاح بنائها والتحقق من بصماتها:
+ينبغي نشر هاتين الحزمتين بعد نجاح بنائهما والتحقق من بصماتهما:
 
-- `Damascus-Emergency-Inventory-v4.0.1-Windows-Offline.zip`
 - `Damascus-Emergency-Inventory-v4.0.1-Windows-Protected.zip`
-- `Damascus-Emergency-Inventory-v4.0.1-Android-Offline.apk`
 - `Damascus-Emergency-Inventory-v4.0.1-Android-Protected.apk`
-- مولّدا التفعيل `KeyGenerator-v4.0.1-P-Windows` و`KeyGenerator-v4.0.1-P-Android`
-- ملفات `SHA256SUMS-windows.txt` و`SHA256SUMS-android.txt`
 
 ## حدود التحقق
 
