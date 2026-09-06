@@ -3,3 +3,4 @@
 - [تهيئة Git في مساحة العمل](git-bootstrap.md) — عند وجود ملفات Replit المخفية، اربط remote من داخل المساحة بدل clone إلى مجلد غير فارغ.
 - [عزل اختبارات E2E](e2e-port-isolation.md) — شغّل عقد الاختبار على منافذ قابلة للضبط بعيدًا عن workflow الرئيسي لتجنب نجاح فحوصات على خادم خاطئ.
 - [بناء Android في Replit](android-release-toolchain.md) — Capacitor 7 يحتاج JDK 21؛ استخدم SDK الرسمي المؤقت عند غياب حزمة androidsdk.
+- [إدارة GitHub Releases](github-release-operations.md) — عند تعثر جلب السر داخل sandbox، نفّذ GitHub API عبر متغير البيئة دون طباعته وتحقق من الأصول بعد الحذف.
