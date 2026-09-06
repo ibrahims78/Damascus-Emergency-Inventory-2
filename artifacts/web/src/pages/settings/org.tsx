@@ -31,11 +31,15 @@ import {
   ListChecks,
   Power,
   Wrench,
+  Monitor,
+  Network,
+  Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { CopyButton } from '@/components/copy-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
@@ -172,6 +176,63 @@ export function OrgTab() {
           <span className="text-sm text-muted-foreground">يوماً</span>
         </div>
       </div>
+
+      <section className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-5" aria-labelledby="browser-access-title">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-primary/10 p-2 text-primary">
+            <Network className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <h3 id="browser-access-title" className="font-semibold">الدخول إلى التطبيق من المستعرض</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              تعمل نسخة Windows كخادم محلي، ويمكن فتحها من نفس الجهاز أو من أجهزة أخرى ضمن الشبكة المحلية.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-lg border bg-background/80 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Monitor className="h-4 w-4 text-primary" aria-hidden="true" />
+              من نفس الجهاز
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              افتح العنوان التالي في Chrome أو Edge على جهاز Windows الذي يشغّل التطبيق:
+            </p>
+            <div className="mt-3 flex items-center justify-between gap-2 rounded-md border bg-card px-2 py-1.5" dir="ltr">
+              <code className="min-w-0 break-all text-sm font-semibold text-foreground">http://localhost:41790</code>
+              <CopyButton value="http://localhost:41790" label="عنوان الدخول المحلي" className="shrink-0" />
+            </div>
+          </div>
+
+          <div className="rounded-lg border bg-background/80 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Network className="h-4 w-4 text-primary" aria-hidden="true" />
+              من جهاز آخر على الشبكة
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              استبدل عنوان IP بعنوان الجهاز المضيف، وتأكد من اتصال الجهازين بالشبكة نفسها.
+            </p>
+            <div className="mt-3 flex items-center justify-between gap-2 rounded-md border bg-card px-2 py-1.5" dir="ltr">
+              <code className="min-w-0 break-all text-sm font-semibold text-foreground">http://192.168.1.25:41790</code>
+              <CopyButton value="http://192.168.1.25:41790" label="عنوان الدخول عبر الشبكة" className="shrink-0" />
+            </div>
+            <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+              المثال السابق يفترض أن عنوان الجهاز المضيف هو <span dir="ltr" className="font-semibold">192.168.1.25</span>.
+              اعرف العنوان الصحيح من أمر <code dir="ltr">ipconfig</code>.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-xs leading-5 text-amber-950 dark:text-amber-100">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <p>
+            لنسخة Windows استخدم المنفذ <code dir="ltr" className="font-semibold">41790</code>.
+            لا تستخدم المنفذ <code dir="ltr" className="font-semibold">5000</code>؛ فهو مخصص لبيئة التطوير في Replit.
+            يجب السماح بالمنفذ في جدار حماية Windows عند الحاجة إلى الدخول من جهاز آخر.
+          </p>
+        </div>
+      </section>
 
       <div className="flex justify-end pt-2">
         <Button onClick={() => mutation.mutate({ orgName, orgSubtitle, expiryAlertDays: Number(expiryAlertDays) })}
