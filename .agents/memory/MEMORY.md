@@ -2,3 +2,4 @@
 - [اختبار رفع الملفات](ui-file-upload-testing.md) — حوار استيراد المواد يعيد إنشاء input بعد أخطاء الملف، لذلك يجب إعادة العثور عليه قبل كل محاولة.
 - [تهيئة Git في مساحة العمل](git-bootstrap.md) — عند وجود ملفات Replit المخفية، اربط remote من داخل المساحة بدل clone إلى مجلد غير فارغ.
 - [عزل اختبارات E2E](e2e-port-isolation.md) — شغّل عقد الاختبار على منافذ قابلة للضبط بعيدًا عن workflow الرئيسي لتجنب نجاح فحوصات على خادم خاطئ.
+- [بناء Android في Replit](android-release-toolchain.md) — Capacitor 7 يحتاج JDK 21؛ استخدم SDK الرسمي المؤقت عند غياب حزمة androidsdk.
