@@ -5,7 +5,7 @@
  * Usage:
  *   node scripts/issue-license.mjs --platform windows|android \
  *     --device-id <deviceId-from-the-client-gate> \
- *     [--private-key release-artifacts/v4.0.0/release-secrets/<platform>/license-private-key.pem] \
+ *     [--private-key release-artifacts/v4.0.1/release-secrets/<platform>/license-private-key.pem] \
  *     [--key-id <keyId>] [--expires 2027-12-31] [--app-version "*"] \
  *     [--features all] [--out license.txt]
  *
@@ -32,8 +32,9 @@ if (!deviceId) {
   process.exit(1);
 }
 const root = path.resolve(import.meta.dirname ?? process.cwd(), "..");
+const releaseVersion = process.env.DAMASCUS_RELEASE_VERSION ?? "v4.0.1";
 const privateKeyPath = path.resolve(
-  arg("private-key") ?? path.join(root, "release-artifacts", "v4.0.0", "release-secrets", platform, "license-private-key.pem"),
+  arg("private-key") ?? path.join(root, "release-artifacts", releaseVersion, "release-secrets", platform, "license-private-key.pem"),
 );
 const keyId = arg("key-id") ?? fs.readFileSync(path.join(path.dirname(privateKeyPath), "key-id.txt"), "utf8").trim();
 const expiresAt = arg("expires") ?? null;

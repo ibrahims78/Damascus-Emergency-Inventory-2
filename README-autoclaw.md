@@ -5,8 +5,8 @@
 ## البيئة
 
 - **Node.js 20+** و **pnpm 9+** (على ويندوز: `pnpm install --ignore-scripts` لتجاوز سكربت preinstall الذي يفترض bash)
-- بناء أندرويد الكامل يحتاج Android Studio + JDK 17 (`android/build-android-apk.ps1`) — البديل المختصر: `release-artifacts/v4.0.0/android/build-android-apk.ps1` (طريقة ترقيع v3.0.1 + apksig، تعمل بلا Studio عبر `%LOCALAPPDATA%\dme-toolchain`)
-- بناء حزم سطح المكتب: `release-artifacts/v4.0.0/scripts/reassemble-electron.ps1` (يستخدم قالب `main-template.cjs` وينسخ `lib/db/desktop-schema.sql`)
+- بناء أندرويد الكامل يحتاج Android SDK وJDK 21 مع Capacitor 7 (`android/build-android-apk.ps1`) — البديل المختصر: `release-artifacts/v4.0.1/android/build-android-apk.ps1`
+- بناء حزم سطح المكتب: `release-artifacts/v4.0.1/scripts/reassemble-electron.ps1` أو سكربت Node المقابل على Linux
 
 ## المنافذ
 
@@ -30,7 +30,7 @@ pnpm --filter @workspace/api-server run build:standard
 pnpm --filter @workspace/api-server run build:protected
 
 # تجميع حزم سطح المكتب (يدمج web + api + schema داخل app.asar)
-./release-artifacts/v4.0.0/scripts/reassemble-electron.ps1
+node release-artifacts/v4.0.1/scripts/reassemble-electron.mjs
 ```
 
 **مهم**: عند تعديل `lib/api-spec/openapi.yaml` نفّذ codegen ثم `tsc --build` قبل typecheck (حزم lib تعتمد على مخرجات TS المترجمة).
@@ -41,7 +41,7 @@ pnpm --filter @workspace/api-server run build:protected
 |---|---|
 | `lib/db/desktop-schema.sql` | مخطط قاعدة الحزم — **ترتيب العبارات حساس** (ALTER بعد CREATE) + ترميم ذاتي مطابق في `lib/db/src/index.ts` |
 | `lib/license-core/src/index.ts` | تحقق الترخيص (WebCrypto + noble الاحتياطي) — مشترك بين الويب والخادم |
-| `release-artifacts/v4.0.0/scripts/main-template.cjs` | قالب إقلاع إلكترون (المنافذ الثابتة + تمرير الترخيص) |
+| `release-artifacts/v4.0.1/scripts/main-template.cjs` | قالب إقلاع إلكترون (المنافذ الثابتة + تمرير الترخيص) |
 | `lib/api-client-react/` + `lib/api-zod/` | مولدة من OpenAPI — **لا تعدل يدوياً** |
 
 ## الاختبارات
@@ -56,7 +56,7 @@ pnpm --filter @workspace/api-server run build:protected
 artifacts/        web (React) + api-server (Express)
 lib/              db, license-core, backup-format, api-spec, api-client-react, api-zod, sync-contract
 android/          مشروع أندرويد (Capacitor)
-release-artifacts/v4.0.0/  سكربتات التجميع + المولدات + مفاتيح التحقق العامة
+release-artifacts/v4.0.1/  سكربتات التجميع + المولدات + مفاتيح التحقق العامة
 docs/             العمليات، دليل المستخدم، قواعد المجال، الاختبارات
 scripts/          الاستيراد (Excel/Equipment)، إصدار التراخيص، CI
 ```

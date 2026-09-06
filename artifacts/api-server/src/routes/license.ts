@@ -21,9 +21,14 @@ import { auditLog } from "../middlewares/audit";
 const router = Router();
 
 const LICENSE_PLATFORM = "windows";
+const RELEASE_VERSION = process.env.DAMASCUS_RELEASE_VERSION ?? "v4.0.1";
 const LICENSE_PUBLIC_KEY_CANDIDATES = [
   process.env.LICENSE_PUBLIC_KEY_FILE,
   path.resolve(import.meta.dirname ?? process.cwd(), "../license-public-key.b64"),
+  path.resolve(
+    import.meta.dirname ?? process.cwd(),
+    `../../../release-artifacts/${RELEASE_VERSION}/license-public-keys/windows.b64`,
+  ),
   path.resolve(
     import.meta.dirname ?? process.cwd(),
     "../../../release-artifacts/v4.0.0/license-public-keys/windows.b64",

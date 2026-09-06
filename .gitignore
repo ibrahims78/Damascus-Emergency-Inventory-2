@@ -71,15 +71,13 @@ attached_assets/
 .damascus-artifact-api-data/
 
 
-# v4.0.0 release binaries stay local (checksums + notes are tracked)
-release-artifacts/v4.0.0/windows/*.zip
-release-artifacts/v4.0.0/android/*.apk
-release-artifacts/v4.0.0/android/*WebBundle*.zip
+# Release binaries stay local (checksums + notes are tracked)
+release-artifacts/v*/windows/*.zip
+release-artifacts/v*/android/*.apk
+release-artifacts/v*/android/*WebBundle*.zip
 
 # runtime logs from the license generators
 issued-licenses-*.log
-release-artifacts/v4.0.0/windows/Damascus-Emergency-Inventory-v4.0.0-Windows-*/
+release-artifacts/v*/windows/Damascus-Emergency-Inventory-*-RUN/
 
-release-artifacts/v4.0.0/scripts/*.class
-
-release-artifacts/v4.0.0/windows/Damascus-Emergency-Inventory-4.0.0-RUN/
+release-artifacts/v*/scripts/*.class

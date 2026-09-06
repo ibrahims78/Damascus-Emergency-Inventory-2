@@ -2,10 +2,10 @@
 
 # منظومة الاحالة و الاسعاف و الطوارئ - دمشق | نظام المستودع
 
-### Damascus EMS Warehouse Management System — v4.0.0
+### Damascus EMS Warehouse Management System — v4.0.1
 
-[![Release](https://img.shields.io/github/v/release/ibrahims78/Damascus-Emergency-Inventory-autoclaw?label=%D8%A7%D9%84%D8%A5%D8%B5%D8%AF%D8%A7%D8%B1&logo=github)](https://github.com/ibrahims78/Damascus-Emergency-Inventory-autoclaw/releases/latest)
-[![CI](https://github.com/ibrahims78/Damascus-Emergency-Inventory-autoclaw/actions/workflows/ci.yml/badge.svg)](https://github.com/ibrahims78/Damascus-Emergency-Inventory-autoclaw/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ibrahims78/Damascus-Emergency-Inventory-2?label=%D8%A7%D9%84%D8%A5%D8%B5%D8%AF%D8%A7%D8%B1&logo=github)](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/releases/latest)
+[![CI](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/actions/workflows/ci.yml/badge.svg)](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/actions/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)](#-التنزيلات)
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 
@@ -17,7 +17,7 @@
 
 ## 📥 التنزيلات
 
-كل الإصدارات الجاهزة من صفحة [**Releases → Packages v4.0.0**](https://github.com/ibrahims78/Damascus-Emergency-Inventory-autoclaw/releases/tag/v4.0.0):
+كل الإصدارات الجاهزة من صفحة [**Releases → Packages v4.0.1**](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/releases/tag/v4.0.1):
 
 | الحزمة | المنصة | الوصف |
 |---|---|---|
@@ -25,7 +25,7 @@
 | `Windows-Offline.zip` | ويندوز 10/11 (64-bit) | نفس النظام بدون بوابة تفعيل (للاستخدام المحلي المباشر) |
 | `Android-Protected.apk` | أندرويد 7+ | النسخة المحمية للهاتف (تفعيل محلي بمعرّف الهاتف) |
 | `Android-Offline.apk` | أندرويد 7+ | النسخة دون تفعيل |
-| `KeyGenerator-v4.0.0-P-{Windows,Android}.cmd/.py` | — | مولّدات التراخيص (تُحفظ الترخيص في ملف نصي) |
+| `KeyGenerator-v4.0.1-P-{Windows,Android}.cmd/.py` | — | مولّدات التراخيص (تُحفظ الترخيص في ملف نصي) |
 | `SHA256SUMS-*.txt` | — | بصمات التحقق من سلامة الحزم |
 
 > الحزم لا تحتاج تثبيتاً: فك الضغط وشغّل `Damascus Emergency Inventory.exe`. لا تحتاج PostgreSQL ولا Node.js ولا اتصال إنترنت.
@@ -57,7 +57,7 @@
 2. فك الضغط وشغّل **`Damascus Emergency Inventory.exe`**
 3. عند أول تشغيل: أنشئ حساب المدير (شاشة «إعداد حساب المدير»)
 4. ستظهر شاشة **«نسخة محمية»** بمعرّف الجهاز — انسخه
-5. شغّل `KeyGenerator-v4.0.0-P-Windows.cmd` والصق المعرّف → انسخ محتوى ملف `license-*.txt`
+5. شغّل `KeyGenerator-v4.0.1-P-Windows.cmd` والصق المعرّف → انسخ محتوى ملف `license-*.txt`
 6. الصقه في التطبيق → **«تفعيل التطبيق»** — انتهى
 
 > التفعيل يُخزَّن في قاعدة بيانات الجهاز (ليس في المتصفح): بعد التفعيل يفتح النظام مفعّلاً من كل متصفحات الشبكة المحلية.
@@ -133,7 +133,7 @@ Recharts            Capacitor (أندرويد)
 │   ├── backup-format/      # صيغة حزم النسخ والمزامنة المشفرة
 │   └── api-spec/           # مواصفة OpenAPI (مصدر الحقيقة)
 ├── android/                # مشروع أندرويد
-├── release-artifacts/v4.0.0/        # سكربتات التجميع والتوقيع والمولّدات
+├── release-artifacts/v4.0.1/        # سكربتات التجميع والتوقيع والمولّدات
 ├── docs/                   # أدلة التشغيل والمستخدم وقواعد المجال
 └── scripts/                # أدوات الاستيراد وإصدار التراخيص + CI
 ```
@@ -154,8 +154,9 @@ pnpm run build                  # بناء كامل
 # بناء حزم الإصدار
 node scripts/build-protected-web.mjs windows          # واجهة النسخة المحمية
 pnpm --filter @workspace/api-server run build:protected
-./release-artifacts/v4.0.0/scripts/reassemble-electron.ps1     # حزمتا ويندوز
-./release-artifacts/v4.0.0/android/build-android-apk.ps1       # حزمتا أندرويد (يتطلب Android Studio)
+node release-artifacts/v4.0.1/scripts/reassemble-electron.mjs  # إعادة تجميع Windows من Linux
+./release-artifacts/v4.0.1/scripts/reassemble-electron.ps1    # إعادة التجميع على Windows
+./release-artifacts/v4.0.1/android/build-android-apk.ps1      # حزمتا أندرويد (يتطلب Android SDK)
 ```
 
 اختبارات CI تعمل تلقائياً عبر `.github/workflows/ci.yml` (مزامنة + أمان + قواعد بيانات على مثيلين حيين).
@@ -169,7 +170,7 @@ pnpm --filter @workspace/api-server run build:protected
 | لا يفتح من متصفح جهاز آخر | جدار الحماية (القاعدتان أعلاه) + `ipconfig` للعنوان الصحيح |
 | `Cannot GET /` على المنفذ 41789 | طبيعي — 41789 هو API فقط؛ الواجهة على **41790** |
 | «الترخيص غير مقبول» | تأكد أن مولّد التفعيل بنفس المنصة وأن المعرّف منسوخ كاملاً |
-| فشلت الاستعادة | حدّث النسخة إلى v4.0.0 (إصلاح مخطط الاستعادة) وشغّل مرة واحدة قبل الاستعادة |
+| فشلت الاستعادة | حدّث النسخة إلى v4.0.1 (يتضمن إصلاحات مخطط الاستعادة) وشغّل مرة واحدة قبل الاستعادة |
 | المنفذ 41789/41790 مشغول | أغلق النسخ المكررة من التطبيق — يعود للمنفذ الثابت |
 
 ---
