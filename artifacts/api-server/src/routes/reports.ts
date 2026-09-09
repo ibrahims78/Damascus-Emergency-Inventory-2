@@ -341,6 +341,142 @@ router.get("/expiry", requireAuth, async (_req, res) => {
   }
 });
 
+// GET /api/reports/near-expiry — active items expiring within the configured
+// window, excluding items that have already expired.
+router.get("/near-expiry", requireAuth, async (_req, res) => {
+  try {
+    const settings = await db.query.systemSettingsTable.findFirst();
+    const alertDays = settings?.expiryAlertDays ?? 30;
+    const today = new Date();
+    const cutoffDate = new Date(today);
+    cutoffDate.setUTCDate(cutoffDate.getUTCDate() + alertDays);
+    const todayString = today.toISOString().split("T")[0];
+    const cutoffString = cutoffDate.toISOString().split("T")[0];
+
+    const items = await db
+      .select({
+        id: itemsTable.id,
+        code: itemsTable.code,
+        name: itemsTable.name,
+        categoryName: categoriesTable.name,
+        itemType: itemsTable.itemType,
+        unit: itemsTable.unit,
+        currentStock: itemsTable.currentStock,
+        minStock: itemsTable.minStock,
+        expiryDate: itemsTable.expiryDate,
+        batchNumber: itemsTable.batchNumber,
+        location: itemsTable.location,
+        supplier: itemsTable.supplier,
+        notes: itemsTable.notes,
+        isActive: itemsTable.isActive,
+        createdAt: itemsTable.createdAt,
+        updatedAt: itemsTable.updatedAt,
+      })
+      .from(itemsTable)
+      .leftJoin(categoriesTable, eq(itemsTable.categoryId, categoriesTable.id))
+      .where(
+        and(
+          eq(itemsTable.isActive, true),
+          sql`${itemsTable.expiryDate} IS NOT NULL
+              AND ${itemsTable.expiryDate} > ${todayString}
+              AND ${itemsTable.expiryDate} <= ${cutoffString}`,
+        ),
+      )
+      .orderBy(itemsTable.expiryDate);
+
+    res.json(items);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/reports/stagnant — active, stocked items with no movement for more
+// than the configured threshold. The current product rule is seven months;
+// every transaction type counts as movement, including the opening movement.
+router.get("/stagnant", requireAuth, async (_req, res) => {
+  try {
+    const staleMonths = 7;
+    const cutoffDate = new Date();
+    cutoffDate.setUTCMonth(cutoffDate.getUTCMonth() - staleMonths);
+
+    const rows = await db
+      .select({
+        id: itemsTable.id,
+        code: itemsTable.code,
+        name: itemsTable.name,
+        categoryName: categoriesTable.name,
+        itemType: itemsTable.itemType,
+        unit: itemsTable.unit,
+        currentStock: itemsTable.currentStock,
+        minStock: itemsTable.minStock,
+        location: itemsTable.location,
+        supplier: itemsTable.supplier,
+        createdAt: itemsTable.createdAt,
+        lastMovementAt: sql<Date | null>`
+          MAX(${transactionsTable.createdAt})
+        `,
+      })
+      .from(itemsTable)
+      .leftJoin(categoriesTable, eq(itemsTable.categoryId, categoriesTable.id))
+      .leftJoin(
+        transactionsTable,
+        and(
+          eq(transactionsTable.itemId, itemsTable.id),
+          eq(transactionsTable.itemType, "item"),
+        ),
+      )
+      .where(
+        and(
+          eq(itemsTable.isActive, true),
+          sql`${itemsTable.currentStock} > 0`,
+        ),
+      )
+      .groupBy(
+        itemsTable.id,
+        itemsTable.code,
+        itemsTable.name,
+        categoriesTable.name,
+        itemsTable.itemType,
+        itemsTable.unit,
+        itemsTable.currentStock,
+        itemsTable.minStock,
+        itemsTable.location,
+        itemsTable.supplier,
+        itemsTable.createdAt,
+      )
+      .having(
+        sql`COALESCE(MAX(${transactionsTable.createdAt}), ${itemsTable.createdAt}) < ${cutoffDate}`,
+      )
+      .orderBy(
+        sql`COALESCE(MAX(${transactionsTable.createdAt}), ${itemsTable.createdAt}) ASC`,
+      );
+
+    res.json({
+      staleMonths,
+      cutoffDate: cutoffDate.toISOString(),
+      items: rows.map((row) => {
+        const lastMovement = row.lastMovementAt
+          ? new Date(row.lastMovementAt)
+          : null;
+        const referenceDate = lastMovement ?? new Date(row.createdAt);
+        const idleDays = Math.max(
+          0,
+          Math.floor((Date.now() - referenceDate.getTime()) / 86_400_000),
+        );
+        return {
+          ...row,
+          lastMovementAt: lastMovement?.toISOString() ?? null,
+          idleDays,
+        };
+      }),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /api/reports/below-min
 router.get("/below-min", requireAuth, async (_req, res) => {
   try {

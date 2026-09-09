@@ -23,6 +23,7 @@ import {
   Wrench,
   TrendingDown,
   TrendingUp,
+  Archive,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -523,7 +524,7 @@ export function DashboardPage() {
       </div>
 
       {/* ── KPI Row 2: Alerts ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           loading={statsLoading}
           title="قرب انتهاء الصلاحية"
@@ -531,7 +532,7 @@ export function DashboardPage() {
           icon={<Clock className="h-4 w-4" />}
           sub={stats ? `خلال ${formatDays(stats.expiryAlertDays)} القادمة` : 'البيانات غير متاحة'}
           variant={nearExpiryVariant}
-          href="/reports?tab=expiry"
+           href="/reports?tab=near-expiry"
         />
         <KpiCard
           loading={statsLoading}
@@ -558,6 +559,15 @@ export function DashboardPage() {
           sub={stats ? 'صيانة / فحص / معطلة' : 'البيانات غير متاحة'}
           variant={equipAlertVariant}
           href="/equipment"
+        />
+        <KpiCard
+          loading={statsLoading}
+          title="مواد راكدة لأكثر من 7 أشهر"
+          value={stats ? formatNumber(stats.stagnantItemsCount) : '—'}
+          icon={<Archive className="h-4 w-4" />}
+          sub={stats ? (stats.stagnantItemsCount ? 'رصيد لم يسجل حركة حديثة' : 'لا توجد مواد راكدة') : 'البيانات غير متاحة'}
+          variant={stats?.stagnantItemsCount ? 'warning' : 'default'}
+          href="/reports?tab=stagnant"
         />
       </div>
 
@@ -725,7 +735,10 @@ export function DashboardPage() {
                       content={(props: TooltipProps<number, string>) => (
                         <ChartTooltip
                           {...props}
-                          itemFormatter={(v, key) => [formatUnit(v), key === 'inQty' ? 'إدخال' : 'إخراج']}
+                           itemFormatter={(v, key, entry) => [
+                             formatUnit(v),
+                             entry.dataKey === 'inQty' ? 'إدخال' : entry.dataKey === 'outQty' ? 'إخراج' : key,
+                           ]}
                         />
                       )}
                     />
@@ -839,7 +852,10 @@ export function DashboardPage() {
                       content={(props: TooltipProps<number, string>) => (
                         <ChartTooltip
                           {...props}
-                          itemFormatter={(v, key) => [formatUnit(v), key === 'inQty' ? 'إدخال' : 'إخراج']}
+                           itemFormatter={(v, key, entry) => [
+                             formatUnit(v),
+                             entry.dataKey === 'inQty' ? 'إدخال' : entry.dataKey === 'outQty' ? 'إخراج' : key,
+                           ]}
                         />
                       )}
                     />

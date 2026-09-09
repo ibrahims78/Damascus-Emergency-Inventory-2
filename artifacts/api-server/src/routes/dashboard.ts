@@ -25,6 +25,8 @@ router.get("/stats", requireAuth, async (_req, res) => {
     alertDate.setUTCDate(alertDate.getUTCDate() + alertDays);
     const alertDateStr = alertDate.toISOString().split("T")[0];
     const today = nowUtc.toISOString().split("T")[0];
+    const stagnantCutoff = new Date(nowUtc);
+    stagnantCutoff.setUTCMonth(stagnantCutoff.getUTCMonth() - 7);
     const monthStart = new Date(
       Date.UTC(nowUtc.getUTCFullYear(), nowUtc.getUTCMonth(), 1)
     );
@@ -38,6 +40,7 @@ router.get("/stats", requireAuth, async (_req, res) => {
       nearExpiryResult,
       expiredResult,
       zeroStockResult,
+      stagnantItemsResult,
       totalEquipmentResult,
       equipmentAlertResult,
       monthlyInResult,
@@ -98,6 +101,27 @@ router.get("/stats", requireAuth, async (_req, res) => {
             eq(itemsTable.isActive, true),
             sql`${itemsTable.currentStock} = 0`
           )
+        ),
+
+      // Stocked active items whose latest item movement is older than seven
+      // months. Items with no recorded movement use their creation date.
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(itemsTable)
+        .where(
+          and(
+            eq(itemsTable.isActive, true),
+            sql`${itemsTable.currentStock} > 0`,
+            sql`COALESCE(
+              (
+                SELECT MAX(t.created_at)
+                FROM transactions t
+                WHERE t.item_id = ${itemsTable.id}
+                  AND t.item_type = 'item'
+              ),
+              ${itemsTable.createdAt}
+            ) < ${stagnantCutoff}`,
+          ),
         ),
 
       // Total equipment — excludes consumed (scrapped/written-off) units
@@ -190,6 +214,7 @@ router.get("/stats", requireAuth, async (_req, res) => {
       nearExpiryCount: Number(nearExpiryResult[0]?.count ?? 0),
       expiredCount: Number(expiredResult[0]?.count ?? 0),
       zeroStockCount: Number(zeroStockResult[0]?.count ?? 0),
+      stagnantItemsCount: Number(stagnantItemsResult[0]?.count ?? 0),
       totalEquipment: Number(totalEquipmentResult[0]?.count ?? 0),
       equipmentAlertCount: Number(equipmentAlertResult[0]?.count ?? 0),
       monthlyIn: Number(monthlyInResult[0]?.count ?? 0),

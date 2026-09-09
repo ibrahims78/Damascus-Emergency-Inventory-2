@@ -114,6 +114,8 @@ export * from './recipient';
 export * from './recipientInput';
 export * from './setupAdminInput';
 export * from './setupStatus';
+export * from './stagnantItem';
+export * from './stagnantItemsReport';
 export * from './stockPositionBatch';
 export * from './stockPositionEquipment';
 export * from './stockPositionItem';

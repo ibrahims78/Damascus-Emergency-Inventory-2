@@ -117,6 +117,33 @@ export interface Item {
   updatedAt?: string;
 }
 
+export interface StagnantItem {
+  id: number;
+  /** @nullable */
+  code?: string | null;
+  name: string;
+  /** @nullable */
+  categoryName?: string | null;
+  itemType: string;
+  unit: string;
+  currentStock: number;
+  minStock: number;
+  /** @nullable */
+  location?: string | null;
+  /** @nullable */
+  supplier?: string | null;
+  createdAt: string;
+  /** @nullable */
+  lastMovementAt?: string | null;
+  idleDays: number;
+}
+
+export interface StagnantItemsReport {
+  staleMonths: number;
+  cutoffDate: string;
+  items: StagnantItem[];
+}
+
 export interface ItemInput {
   /** @nullable */
   code?: string | null;
@@ -995,6 +1022,8 @@ export interface DashboardStats {
   expiredCount: number;
   /** Active items with currentStock = 0 */
   zeroStockCount: number;
+  /** Active stocked items with no movement for more than seven months */
+  stagnantItemsCount: number;
   /** Equipment count excluding consumed/scrapped units */
   totalEquipment: number;
   /** Equipment in maintenance, needs_inspection, or broken state */

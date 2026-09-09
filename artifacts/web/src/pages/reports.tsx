@@ -5,6 +5,8 @@ import {
   useGetStockReport,
   useGetMovementsReport,
   useGetExpiryReport,
+  useGetNearExpiryReport,
+  useGetStagnantItemsReport,
   useGetBelowMinReport,
   useGetEquipmentReport,
   useGetStockPositionReport,
@@ -15,6 +17,7 @@ import {
   type StockPositionItem,
   type StockPositionEquipment,
   type CustodyReportRecord,
+  type StagnantItem,
 } from '@workspace/api-client-react';
 import {
   Printer,
@@ -28,6 +31,8 @@ import {
   ExternalLink,
   Boxes,
   UserRoundCheck,
+  Clock,
+  Archive,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -572,18 +577,23 @@ function MovementsTab() {
 
 // ─── tab 3: expiry ──────────────────────────────────────────────────────────
 
-function ExpiryTab() {
-  const { data, isLoading, isError, refetch } = useGetExpiryReport();
+function ExpiryTab({ onlyNear = false }: { onlyNear?: boolean }) {
+  const allExpiryQuery = useGetExpiryReport();
+  const nearExpiryQuery = useGetNearExpiryReport();
+  const data = onlyNear ? nearExpiryQuery.data : allExpiryQuery.data;
+  const isLoading = onlyNear ? nearExpiryQuery.isLoading : allExpiryQuery.isLoading;
+  const isError = onlyNear ? nearExpiryQuery.isError : allExpiryQuery.isError;
+  const refetch = onlyNear ? nearExpiryQuery.refetch : allExpiryQuery.refetch;
   const items = data ?? [];
 
   const expired = items.filter(
     (i) => i.expiryDate && new Date(i.expiryDate) < new Date(),
   ).length;
-  const nearExpiry = items.length - expired;
+  const nearExpiry = onlyNear ? items.length : items.length - expired;
 
   const handleExport = async () => {
     await exportXlsx(
-      exportFilename('تقرير-قرب-انتهاء-الصلاحية'),
+      exportFilename(onlyNear ? 'تقرير-قرب-انتهاء-الصلاحية' : 'تقرير-الصلاحية'),
       ['الاسم', 'الرصيد', 'الوحدة', 'تاريخ الانتهاء', 'الأيام المتبقية'],
       items.map((i: Item) => {
         const days = i.expiryDate
@@ -596,9 +606,11 @@ function ExpiryTab() {
 
   return (
     <>
-      <PrintHeader title="تقرير الأصناف القريبة من انتهاء الصلاحية" />
+       <PrintHeader title={onlyNear ? 'تقرير الأصناف القريبة من انتهاء الصلاحية' : 'تقرير الصلاحية'} />
       <div className="grid grid-cols-2 gap-4 mb-4 print:grid">
-        <SummaryCard label="منتهية الصلاحية" value={expired} accent={expired > 0 ? 'danger' : 'success'} />
+         {!onlyNear && (
+           <SummaryCard label="منتهية الصلاحية" value={expired} accent={expired > 0 ? 'danger' : 'success'} />
+         )}
         <SummaryCard label="ضمن فترة التنبيه" value={nearExpiry} accent={nearExpiry > 0 ? 'warning' : 'success'} />
       </div>
 
@@ -629,8 +641,8 @@ function ExpiryTab() {
               <ReportErrorState onRetry={() => void refetch()} />
             ) : isLoading ? (
               <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">جاري التحميل...</TableCell></TableRow>
-            ) : items.length === 0 ? (
-              <EmptyState message="✅ لا توجد أصناف قريبة من انتهاء الصلاحية" />
+             ) : items.length === 0 ? (
+              <EmptyState message={onlyNear ? '✅ لا توجد أصناف قريبة من انتهاء الصلاحية' : '✅ لا توجد أصناف منتهية أو قريبة من انتهاء الصلاحية'} />
             ) : (
               items.map((item: Item) => {
                 const days = item.expiryDate
@@ -650,7 +662,7 @@ function ExpiryTab() {
                       {isExpired ? `منتهية منذ ${Math.abs(days)} يوم` : `${days} يوم`}
                     </TableCell>
                     <TableCell className="text-center">
-                      {isExpired ? (
+                       {isExpired ? (
                         <Badge variant="destructive" className="text-xs">منتهية الصلاحية</Badge>
                       ) : (
                         <Badge className="bg-warning/15 text-warning border-warning/30 border text-xs">قرب الانتهاء</Badge>
@@ -767,7 +779,101 @@ function BelowMinTab() {
   );
 }
 
-// ─── tab 5: equipment ───────────────────────────────────────────────────────
+// ─── tab 5: stagnant items ──────────────────────────────────────────────────
+
+function StagnantTab() {
+  const { data, isLoading, isError, refetch } = useGetStagnantItemsReport();
+  const items = data?.items ?? [];
+  const totalStock = items.reduce((sum, item) => sum + item.currentStock, 0);
+
+  const handleExport = async () => {
+    await exportXlsx(
+      exportFilename('تقرير-المواد-الراكدة'),
+      ['الرمز', 'اسم المادة', 'التصنيف', 'الرصيد الحالي', 'الحد الأدنى', 'الوحدة', 'آخر حركة', 'مدة الركود بالأيام', 'الموقع', 'المورد'],
+      items.map((item: StagnantItem) => [
+        item.code ?? '',
+        item.name,
+        item.categoryName ?? '',
+        item.currentStock,
+        item.minStock,
+        item.unit,
+        item.lastMovementAt ? formatDateTime(item.lastMovementAt) : 'لا توجد حركة مسجلة',
+        item.idleDays,
+        item.location ?? '',
+        item.supplier ?? '',
+      ]),
+    );
+  };
+
+  return (
+    <>
+      <PrintHeader title="تقرير المواد الراكدة لأكثر من 7 أشهر" />
+      <div className="grid grid-cols-2 gap-4 mb-4 print:grid">
+        <SummaryCard label="المواد الراكدة" value={items.length} accent={items.length > 0 ? 'warning' : 'success'} />
+        <SummaryCard label="الرصيد المجمد" value={totalStock.toLocaleString('ar')} sub="وحدة ضمن مواد راكدة" accent={items.length > 0 ? 'danger' : 'success'} />
+      </div>
+      <div className="mb-4 rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+        يعرض التقرير المواد النشطة ذات الرصيد الموجب التي لم تسجل أي حركة لأكثر من 7 أشهر. تُحتسب كل حركة مسجلة للصنف، بما فيها الإدخال الافتتاحي.
+      </div>
+      <div className="flex justify-end gap-2 mb-4 print:hidden">
+        <Button type="button" variant="outline" size="sm" className="gap-2" onClick={printCurrentPage}>
+          <Printer className="w-4 h-4" />طباعة
+        </Button>
+        <Button variant="outline" size="sm" className="gap-2" onClick={handleExport}>
+          <Download className="w-4 h-4" />تصدير Excel
+        </Button>
+      </div>
+      <div className="report-table-shell border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-right">الرمز</TableHead>
+              <TableHead className="text-right">اسم المادة</TableHead>
+              <TableHead className="text-right">التصنيف</TableHead>
+              <TableHead className="text-center">الرصيد</TableHead>
+              <TableHead className="text-center">الحد الأدنى</TableHead>
+              <TableHead className="text-right">آخر حركة</TableHead>
+              <TableHead className="text-center">مدة الركود</TableHead>
+              <TableHead className="text-right">الموقع</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isError ? (
+              <ReportErrorState onRetry={() => void refetch()} />
+            ) : isLoading ? (
+              <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">جاري التحميل...</TableCell></TableRow>
+            ) : items.length === 0 ? (
+              <EmptyState message="✅ لا توجد مواد راكدة لأكثر من 7 أشهر" />
+            ) : (
+              items.map((item: StagnantItem) => (
+                <TableRow key={item.id} className="bg-warning/5">
+                  <TableCell className="font-mono text-xs text-muted-foreground">{item.code ?? '—'}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link href={`/items/${item.id}`} className="text-primary underline-offset-4 hover:underline">
+                      {item.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{item.categoryName ?? '—'}</TableCell>
+                  <TableCell className="text-center font-bold">{item.currentStock.toLocaleString('ar')} <span className="text-xs font-normal text-muted-foreground">{item.unit}</span></TableCell>
+                  <TableCell className="text-center text-muted-foreground">{item.minStock.toLocaleString('ar')}</TableCell>
+                  <TableCell className="text-sm">{item.lastMovementAt ? formatDateTime(item.lastMovementAt) : 'لا توجد حركة مسجلة'}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge className="bg-warning/15 text-warning border-warning/30 border text-xs">
+                      {item.idleDays.toLocaleString('ar')} يوم
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{item.location ?? '—'}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </>
+  );
+}
+
+// ─── tab 6: equipment ───────────────────────────────────────────────────────
 
 function EquipmentTab() {
   const { data, isLoading, isError, refetch } = useGetEquipmentReport();
@@ -1127,7 +1233,7 @@ function CustodiesTab() {
 
 // ─── main page ──────────────────────────────────────────────────────────────
 
-const VALID_TABS = ['stock', 'movements', 'expiry', 'below-min', 'equipment', 'stock-position', 'custodies'] as const;
+const VALID_TABS = ['stock', 'movements', 'near-expiry', 'expiry', 'below-min', 'stagnant', 'equipment', 'stock-position', 'custodies'] as const;
 type TabValue = typeof VALID_TABS[number];
 
 function getInitialTab(): TabValue {
@@ -1164,7 +1270,7 @@ export function ReportsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-7 h-auto print:hidden">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-9 h-auto print:hidden">
           <TabsTrigger value="stock" className="gap-1.5 text-xs py-2">
             <PackageSearch className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">جرد المخزون</span>
@@ -1175,6 +1281,11 @@ export function ReportsPage() {
             <span className="hidden sm:inline">حركة المواد</span>
             <span className="sm:hidden">الحركة</span>
           </TabsTrigger>
+          <TabsTrigger value="near-expiry" className="gap-1.5 text-xs py-2">
+            <Clock className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">قرب الانتهاء</span>
+            <span className="sm:hidden">قريبًا</span>
+          </TabsTrigger>
           <TabsTrigger value="expiry" className="gap-1.5 text-xs py-2">
             <AlertTriangle className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">انتهاء الصلاحية</span>
@@ -1184,6 +1295,11 @@ export function ReportsPage() {
             <ShieldAlert className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">أقل من الحد</span>
             <span className="sm:hidden">نواقص</span>
+          </TabsTrigger>
+          <TabsTrigger value="stagnant" className="gap-1.5 text-xs py-2">
+            <Archive className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">مواد راكدة</span>
+            <span className="sm:hidden">راكدة</span>
           </TabsTrigger>
           <TabsTrigger value="equipment" className="gap-1.5 text-xs py-2">
             <Stethoscope className="w-3.5 h-3.5" />
@@ -1211,8 +1327,14 @@ export function ReportsPage() {
         <TabsContent value="expiry" className="mt-0">
           <ExpiryTab />
         </TabsContent>
+        <TabsContent value="near-expiry" className="mt-0">
+          <ExpiryTab onlyNear />
+        </TabsContent>
         <TabsContent value="below-min" className="mt-0">
           <BelowMinTab />
+        </TabsContent>
+        <TabsContent value="stagnant" className="mt-0">
+          <StagnantTab />
         </TabsContent>
         <TabsContent value="equipment" className="mt-0">
           <EquipmentTab />

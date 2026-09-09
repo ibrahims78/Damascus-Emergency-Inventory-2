@@ -937,6 +937,34 @@ paths:
                 items:
                   $ref: "#/components/schemas/Item"
 
+  /reports/near-expiry:
+    get:
+      operationId: getNearExpiryReport
+      tags: [reports]
+      summary: Active items nearing expiry, excluding expired items
+      responses:
+        "200":
+          description: Near expiry report
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Item"
+
+  /reports/stagnant:
+    get:
+      operationId: getStagnantItemsReport
+      tags: [reports]
+      summary: Active stocked items with no movement for more than seven months
+      responses:
+        "200":
+          description: Stagnant items report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StagnantItemsReport"
+
   /reports/below-min:
     get:
       operationId: getBelowMinReport
@@ -1904,6 +1932,43 @@ components:
         updatedAt:
           type: string
 
+    StagnantItem:
+      type: object
+      required:
+        - id
+        - name
+        - unit
+        - itemType
+        - currentStock
+        - minStock
+        - createdAt
+        - idleDays
+      properties:
+        id: { type: integer }
+        code: { type: ["string", "null"] }
+        name: { type: string }
+        categoryName: { type: ["string", "null"] }
+        itemType: { type: string }
+        unit: { type: string }
+        currentStock: { type: integer }
+        minStock: { type: integer }
+        location: { type: ["string", "null"] }
+        supplier: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        lastMovementAt: { type: ["string", "null"], format: date-time }
+        idleDays: { type: integer }
+
+    StagnantItemsReport:
+      type: object
+      required: [staleMonths, cutoffDate, items]
+      properties:
+        staleMonths: { type: integer }
+        cutoffDate: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StagnantItem"
+
     ItemInput:
       type: object
       required: [name, unit, itemType]
@@ -2820,6 +2885,7 @@ components:
         - nearExpiryCount
         - expiredCount
         - zeroStockCount
+        - stagnantItemsCount
         - totalEquipment
         - equipmentAlertCount
         - monthlyIn
@@ -2842,6 +2908,9 @@ components:
         zeroStockCount:
           type: integer
           description: Active items with currentStock = 0
+        stagnantItemsCount:
+          type: integer
+          description: Active stocked items with no movement for more than seven months
         totalEquipment:
           type: integer
           description: Equipment count excluding consumed/scrapped units

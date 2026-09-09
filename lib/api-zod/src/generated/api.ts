@@ -1349,6 +1349,7 @@ export const GetDashboardStatsResponse = zod.object({
   "nearExpiryCount": zod.number().int().describe('Active items expiring within expiryAlertDays, not yet expired'),
   "expiredCount": zod.number().int().describe('Active items whose expiryDate <= today'),
   "zeroStockCount": zod.number().int().describe('Active items with currentStock = 0'),
+  "stagnantItemsCount": zod.number().int().describe('Active stocked items with no movement for more than seven months'),
   "totalEquipment": zod.number().int().describe('Equipment count excluding consumed\/scrapped units'),
   "equipmentAlertCount": zod.number().int().describe('Equipment in maintenance, needs_inspection, or broken state'),
   "monthlyIn": zod.number().int().describe('IN transactions this calendar month'),
@@ -1552,6 +1553,55 @@ export const GetExpiryReportResponseItem = zod.object({
   "updatedAt": zod.string().optional()
 })
 export const GetExpiryReportResponse = zod.array(GetExpiryReportResponseItem)
+
+
+/**
+ * @summary Active items nearing expiry, excluding expired items
+ */
+export const GetNearExpiryReportResponseItem = zod.object({
+  "id": zod.number().int(),
+  "code": zod.string().nullish(),
+  "name": zod.string(),
+  "categoryId": zod.number().int().nullish(),
+  "categoryName": zod.string().nullish(),
+  "itemType": zod.string(),
+  "unit": zod.string(),
+  "currentStock": zod.number().int(),
+  "minStock": zod.number().int(),
+  "expiryDate": zod.string().nullish(),
+  "batchNumber": zod.string().nullish(),
+  "location": zod.string().nullish(),
+  "supplier": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+export const GetNearExpiryReportResponse = zod.array(GetNearExpiryReportResponseItem)
+
+
+/**
+ * @summary Active stocked items with no movement for more than seven months
+ */
+export const GetStagnantItemsReportResponse = zod.object({
+  "staleMonths": zod.number().int(),
+  "cutoffDate": zod.coerce.date(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "code": zod.string().nullish(),
+  "name": zod.string(),
+  "categoryName": zod.string().nullish(),
+  "itemType": zod.string(),
+  "unit": zod.string(),
+  "currentStock": zod.number().int(),
+  "minStock": zod.number().int(),
+  "location": zod.string().nullish(),
+  "supplier": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "lastMovementAt": zod.coerce.date().nullish(),
+  "idleDays": zod.number().int()
+}))
+})
 
 
 /**

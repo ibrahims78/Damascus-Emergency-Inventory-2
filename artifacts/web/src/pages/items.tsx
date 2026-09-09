@@ -3,6 +3,7 @@ import { Link, useRoute, useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   useDeleteItem,
+  useGetStockReport,
   useListCategories,
   useGetCurrentUser,
   type Item,
@@ -475,15 +476,17 @@ function ItemsList() {
     staleTime: 30_000,
   });
 
-  /* Unfiltered full list for KPI counts */
-  const { data: allData } = useQuery<{ items: Item[]; total: number }>({
-    queryKey: ['items-kpi'],
+  /* The stock report is unpaginated and therefore gives KPI cards the complete
+     active catalog instead of an arbitrary first page. */
+  const { data: stockItems, isLoading: stockItemsLoading } = useGetStockReport();
+  const { data: reportSettings } = useQuery<{ expiryAlertDays?: number }>({
+    queryKey: ['settings', 'items-expiry'],
     queryFn: async () => {
-      const res = await fetch('/api/items?limit=1000', { credentials: 'include' });
-      if (!res.ok) throw new Error('');
+      const res = await fetch('/api/settings', { credentials: 'include' });
+      if (!res.ok) throw new Error('تعذر جلب إعدادات الصلاحية');
       return res.json();
     },
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
 
   const { data: categoriesData } = useListCategories();
@@ -491,21 +494,21 @@ function ItemsList() {
 
   /* KPI counts from unfiltered data */
   const stats = (() => {
-    const list = allData?.items ?? [];
+    const list = stockItems ?? [];
     const now = Date.now();
-    const day30 = 30 * 86_400_000;
+    const expiryWindow = (reportSettings?.expiryAlertDays ?? 30) * 86_400_000;
     return {
       total:      list.length,
       normal:     list.filter((i) => {
         const exp = i.expiryDate ? new Date(i.expiryDate).getTime() : null;
         const expired    = exp !== null && exp < now;
-        const nearExp    = exp !== null && !expired && (exp - now) <= day30;
+        const nearExp    = exp !== null && !expired && (exp - now) <= expiryWindow;
         const belowMin   = i.minStock > 0 && i.currentStock <= i.minStock;
         return !expired && !nearExp && !belowMin;
       }).length,
       nearExpiry: list.filter((i) => {
         const exp = i.expiryDate ? new Date(i.expiryDate).getTime() : null;
-        return exp !== null && exp >= now && (exp - now) <= day30;
+        return exp !== null && exp >= now && (exp - now) <= expiryWindow;
       }).length,
       critical:   list.filter((i) => {
         const exp = i.expiryDate ? new Date(i.expiryDate).getTime() : null;
@@ -550,28 +553,28 @@ function ItemsList() {
             label="إجمالي الأصناف"
             value={stats.total}
             colorClass="bg-primary/10 text-primary"
-            loading={!allData}
+            loading={stockItemsLoading}
           />
           <StatCard
             icon={CheckCircle2}
             label="مخزون طبيعي"
             value={stats.normal}
             colorClass="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
-            loading={!allData}
+            loading={stockItemsLoading}
           />
           <StatCard
             icon={Clock}
             label="قرب انتهاء الصلاحية"
             value={stats.nearExpiry}
             colorClass="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
-            loading={!allData}
+            loading={stockItemsLoading}
           />
           <StatCard
             icon={AlertTriangle}
             label="نقص / منتهية الصلاحية"
             value={stats.critical}
             colorClass="bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
-            loading={!allData}
+            loading={stockItemsLoading}
           />
         </div>
 
@@ -767,7 +770,8 @@ function ItemsList() {
                     const now = Date.now();
                     const exp = item.expiryDate ? new Date(item.expiryDate).getTime() : null;
                     const isExpired    = exp !== null && exp < now;
-                    const isNearExpiry = exp !== null && !isExpired && (exp - now) <= 30 * 86_400_000;
+                    const expiryWindow = (reportSettings?.expiryAlertDays ?? 30) * 86_400_000;
+                    const isNearExpiry = exp !== null && !isExpired && (exp - now) <= expiryWindow;
                     const isBelowMin   = item.minStock > 0 && item.currentStock <= item.minStock;
 
                     const rowBg = isExpired || isBelowMin

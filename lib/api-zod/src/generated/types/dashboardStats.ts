@@ -18,6 +18,8 @@ export interface DashboardStats {
   expiredCount: number;
   /** Active items with currentStock = 0 */
   zeroStockCount: number;
+  /** Active stocked items with no movement for more than seven months */
+  stagnantItemsCount: number;
   /** Equipment count excluding consumed/scrapped units */
   totalEquipment: number;
   /** Equipment in maintenance, needs_inspection, or broken state */

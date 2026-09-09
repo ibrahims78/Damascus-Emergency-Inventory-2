@@ -79,15 +79,24 @@ router.get("/", requireAuth, async (req, res) => {
         )!
       );
     }
-    if (belowMin === "true")
-      conditions.push(lte(itemsTable.currentStock, itemsTable.minStock));
+    if (belowMin === "true") {
+      conditions.push(
+        and(
+          sql`${itemsTable.minStock} > 0`,
+          lte(itemsTable.currentStock, itemsTable.minStock),
+        )!,
+      );
+    }
     if (nearExpiry === "true") {
       const settings = await db.query.systemSettingsTable.findFirst();
       const alertDays = settings?.expiryAlertDays ?? 30;
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() + alertDays);
+      const today = new Date().toISOString().split("T")[0];
       conditions.push(
-        sql`${itemsTable.expiryDate} IS NOT NULL AND ${itemsTable.expiryDate} <= ${cutoffDate.toISOString().split("T")[0]}`
+        sql`${itemsTable.expiryDate} IS NOT NULL
+          AND ${itemsTable.expiryDate} > ${today}
+          AND ${itemsTable.expiryDate} <= ${cutoffDate.toISOString().split("T")[0]}`
       );
     }
 

@@ -78,6 +78,7 @@ import type {
   RecipientInput,
   SetupAdminInput,
   SetupStatus,
+  StagnantItemsReport,
   StockPositionReport,
   SystemSettings,
   SystemSettingsInput,
@@ -3591,6 +3592,160 @@ export function useGetExpiryReport<TData = Awaited<ReturnType<typeof getExpiryRe
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetExpiryReportQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetNearExpiryReportUrl = () => {
+
+
+
+
+  return `/api/reports/near-expiry`
+}
+
+/**
+ * @summary Active items nearing expiry, excluding expired items
+ */
+export const getNearExpiryReport = async ( options?: Parameters<typeof customFetch>[1]): Promise<Item[]> => {
+
+  return customFetch<Item[]>(getGetNearExpiryReportUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetNearExpiryReportQueryKey = () => {
+    return [
+    `/api/reports/near-expiry`
+    ] as const;
+    }
+
+
+export const getGetNearExpiryReportQueryOptions = <TData = Awaited<ReturnType<typeof getNearExpiryReport>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNearExpiryReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetNearExpiryReportQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getNearExpiryReport>>> = ({ signal }) => getNearExpiryReport({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getNearExpiryReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetNearExpiryReportQueryResult = NonNullable<Awaited<ReturnType<typeof getNearExpiryReport>>>
+export type GetNearExpiryReportQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Active items nearing expiry, excluding expired items
+ */
+
+export function useGetNearExpiryReport<TData = Awaited<ReturnType<typeof getNearExpiryReport>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNearExpiryReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetNearExpiryReportQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetStagnantItemsReportUrl = () => {
+
+
+
+
+  return `/api/reports/stagnant`
+}
+
+/**
+ * @summary Active stocked items with no movement for more than seven months
+ */
+export const getStagnantItemsReport = async ( options?: Parameters<typeof customFetch>[1]): Promise<StagnantItemsReport> => {
+
+  return customFetch<StagnantItemsReport>(getGetStagnantItemsReportUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetStagnantItemsReportQueryKey = () => {
+    return [
+    `/api/reports/stagnant`
+    ] as const;
+    }
+
+
+export const getGetStagnantItemsReportQueryOptions = <TData = Awaited<ReturnType<typeof getStagnantItemsReport>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStagnantItemsReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetStagnantItemsReportQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStagnantItemsReport>>> = ({ signal }) => getStagnantItemsReport({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStagnantItemsReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetStagnantItemsReportQueryResult = NonNullable<Awaited<ReturnType<typeof getStagnantItemsReport>>>
+export type GetStagnantItemsReportQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Active stocked items with no movement for more than seven months
+ */
+
+export function useGetStagnantItemsReport<TData = Awaited<ReturnType<typeof getStagnantItemsReport>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStagnantItemsReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetStagnantItemsReportQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
