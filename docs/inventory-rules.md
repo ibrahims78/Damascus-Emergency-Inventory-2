@@ -92,7 +92,7 @@
 | `EQUIPMENT_CUSTODY_REQUIRED` | محاولة إخراج تجهيز دون مسار عهدة |
 | `INVALID_SUPPLY_SOURCE` | جهة التوريد ليست المستودعات المركزية |
 | `INVALID_DATE` | تاريخ غير صالح أو بصيغة غير مدعومة |
-| `INVALID_DELIVERY_DESTINATION` | جهة التسليم ليست مبنى إداريًا أو نقطة إسعاف |
+| `INVALID_DELIVERY_DESTINATION` | جهة التسليم ليست مبنى إداريًا أو مرفقًا صحيًا |
 | `RECIPIENT_REQUIRED` | اسم المستلم/الجهة غير محدد من القائمة |
 | `INTERNAL_DELIVERY_NOTE_REQUIRED` | مذكرة التسليم الداخلية ناقصة |
 
