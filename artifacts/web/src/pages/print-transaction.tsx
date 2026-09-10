@@ -192,7 +192,14 @@ export function PrintTransactionPage() {
               <InfoRow label="سبب الإخراج" value={tx.exitReason} />
             )}
             {isOut && tx.deliveryDestination && (
-              <InfoRow label="وجهة التسليم" value={tx.deliveryDestination === 'ambulance_point' ? 'نقطة إسعاف' : 'المبنى الإداري'} />
+              <InfoRow
+                label="وجهة التسليم"
+                value={
+                  tx.deliveryDestination === 'administrative_building'
+                    ? 'المبنى الإداري'
+                    : 'مرفق صحي'
+                }
+              />
             )}
             {isOut && tx.internalDeliveryNoteNumber && (
               <InfoRow label="رقم مذكرة التسليم الداخلية" value={tx.internalDeliveryNoteNumber} />

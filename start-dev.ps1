@@ -1,4 +1,4 @@
-﻿# Damascus-Emergency-Inventory-autoclaw — تشغيل البيئة الكاملة
+﻿# مستودعات مديرية صحة دمشق — تشغيل البيئة الكاملة
 $ErrorActionPreference = "Continue"
 $env:PATH = "C:\Program Files\Git\bin;" + $env:PATH
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path

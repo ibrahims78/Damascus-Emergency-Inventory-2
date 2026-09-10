@@ -50,7 +50,7 @@ const schema = z.object({
   exitReasonId: z.coerce.number().min(1, 'سبب الإخراج مطلوب'),
   internalDeliveryNoteNumber: z.string().trim().min(1, 'رقم مذكرة التسليم الداخلية مطلوب'),
   internalDeliveryNoteDate: z.string().refine(isValidDate, 'تاريخ مذكرة التسليم الداخلية غير صالح'),
-  deliveryDestination: z.enum(['administrative_building', 'ambulance_point']),
+  deliveryDestination: z.enum(['administrative_building', 'health_facility']),
   notes: z.string().optional().nullable(),
 });
 
@@ -85,7 +85,7 @@ export function TransactionOutForm() {
       exitReasonId: 0,
       internalDeliveryNoteNumber: '',
       internalDeliveryNoteDate: '',
-      deliveryDestination: 'ambulance_point',
+      deliveryDestination: 'health_facility',
       notes: '',
     },
   });
@@ -471,7 +471,7 @@ export function TransactionOutForm() {
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="administrative_building">مبنى إداري</SelectItem>
-                      <SelectItem value="ambulance_point">نقطة إسعاف</SelectItem>
+                      <SelectItem value="health_facility">مرفق صحي</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

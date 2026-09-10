@@ -544,7 +544,7 @@ export function EquipmentForm({ equipmentId }: { equipmentId?: number }) {
                         <Input
                           {...field}
                           value={field.value || ''}
-                          placeholder="اسم المسعف أو رقم سيارة الإسعاف"
+                          placeholder="اسم أمين العهدة أو رقم الأصل"
                         />
                       </FormControl>
                       <FormMessage />

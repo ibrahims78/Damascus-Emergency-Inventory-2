@@ -110,7 +110,7 @@ router.get("/export", requireAuth, requireRole("admin"), async (req, res) => {
     };
 
     const dateStr = new Date().toISOString().split("T")[0];
-    const filename = `ems-warehouse-backup-${dateStr}.json`;
+    const filename = `damascus-health-directorate-warehouse-backup-${dateStr}.json`;
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader(
       "Content-Disposition",

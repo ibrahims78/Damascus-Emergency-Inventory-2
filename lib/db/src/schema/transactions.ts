@@ -102,7 +102,7 @@ export const transactionsTable = pgTable(
     ),
     check(
       "transactions_delivery_destination_valid",
-      sql`${table.deliveryDestination} IS NULL OR ${table.deliveryDestination} IN ('administrative_building', 'ambulance_point')`
+      sql`${table.deliveryDestination} IS NULL OR ${table.deliveryDestination} IN ('administrative_building', 'health_facility', 'ambulance_point')`
     ),
     index("transactions_created_at_idx").on(table.createdAt),
     index("transactions_document_date_idx").on(table.documentDate),

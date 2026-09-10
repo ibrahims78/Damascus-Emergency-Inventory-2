@@ -1,4 +1,4 @@
-﻿# Damascus-Emergency-Inventory-autoclaw — إعادة بذر البيانات (بعد إيقاف الخادم)
+﻿# مستودعات مديرية صحة دمشق — إعادة بذر البيانات (بعد إيقاف الخادم)
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $env:PATH = "C:\Program Files\Git\bin;" + $env:PATH

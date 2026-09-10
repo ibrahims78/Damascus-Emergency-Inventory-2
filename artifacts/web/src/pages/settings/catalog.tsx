@@ -437,7 +437,7 @@ export function RecipientsTab() {
                   saveMutation.mutate({ name: newName, notes: newNotes });
                 }
               }}
-              placeholder="مثال: نقطة إسعاف المزة"
+              placeholder="مثال: مستودع المزة الفرعي"
             />
           </div>
           <div className="space-y-1.5">

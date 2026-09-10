@@ -10,6 +10,8 @@ export type SupplySource = (typeof SUPPLY_SOURCES)[number];
 
 export const DELIVERY_DESTINATIONS = [
   "administrative_building",
+  "health_facility",
+  // Kept for importing and reading records created by older releases.
   "ambulance_point",
 ] as const;
 export type DeliveryDestination = (typeof DELIVERY_DESTINATIONS)[number];

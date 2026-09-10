@@ -1,6 +1,6 @@
-# دليل التطوير التقني — Damascus-Emergency-Inventory-autoclaw
+# دليل التطوير التقني — مستودعات مديرية صحة دمشق
 
-> هذا الدليل لمن يريد البناء من المصدر أو المساهمة. للاستخدام اليومي راجع [README.md](README.md) وصفحة [الإصدارات](https://github.com/ibrahims78/Damascus-Emergency-Inventory-autoclaw/releases).
+> هذا الدليل لمن يريد البناء من المصدر أو المساهمة. للاستخدام اليومي راجع [README.md](README.md) وصفحة [الإصدارات](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/releases).
 
 ## البيئة
 

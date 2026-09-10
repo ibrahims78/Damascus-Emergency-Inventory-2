@@ -2381,7 +2381,7 @@ components:
           type: ["string", "null"]
         deliveryDestination:
           type: ["string", "null"]
-          enum: [administrative_building, ambulance_point, null]
+          enum: [administrative_building, health_facility, ambulance_point, null]
         custodyHolderName:
           type: ["string", "null"]
         custodyNoteNumber:
@@ -2542,7 +2542,7 @@ components:
           format: date
         deliveryDestination:
           type: string
-          enum: [administrative_building, ambulance_point]
+          enum: [administrative_building, health_facility, ambulance_point]
         notes:
           type: ["string", "null"]
 

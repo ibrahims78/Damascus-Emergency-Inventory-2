@@ -14,5 +14,6 @@ export type TransactionDeliveryDestination = typeof TransactionDeliveryDestinati
 
 export const TransactionDeliveryDestination = {
   administrative_building: 'administrative_building',
+  health_facility: 'health_facility',
   ambulance_point: 'ambulance_point',
 } as const;

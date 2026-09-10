@@ -304,7 +304,7 @@ CREATE TABLE "transactions" (
 	CONSTRAINT "transactions_quantity_positive" CHECK ("transactions"."quantity" IS NULL OR "transactions"."quantity" > 0),
 	CONSTRAINT "transactions_document_number_nonempty" CHECK (length(btrim("transactions"."document_number")) > 0),
 	CONSTRAINT "transactions_supply_source_central" CHECK ("transactions"."supply_source" IS NULL OR "transactions"."supply_source" = 'central_warehouses'),
-	CONSTRAINT "transactions_delivery_destination_valid" CHECK ("transactions"."delivery_destination" IS NULL OR "transactions"."delivery_destination" IN ('administrative_building', 'ambulance_point'))
+CONSTRAINT "transactions_delivery_destination_valid" CHECK ("transactions"."delivery_destination" IS NULL OR "transactions"."delivery_destination" IN ('administrative_building', 'health_facility', 'ambulance_point'))
 );
 --> statement-breakpoint--> statement-breakpointALTER TABLE "transactions"
   ADD COLUMN "operation_id" text,

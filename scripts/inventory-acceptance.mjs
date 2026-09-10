@@ -381,7 +381,7 @@ async function main() {
         exitReasonId: exitReasons[0].id,
         internalDeliveryNoteNumber: `ACC-OUT-${itemCode}`,
         internalDeliveryNoteDate: "2026-09-10",
-        deliveryDestination: "ambulance_point",
+        deliveryDestination: "health_facility",
       },
     });
     assert(outbound.status === 201, "فشل الصرف الجزئي", outbound.payload);

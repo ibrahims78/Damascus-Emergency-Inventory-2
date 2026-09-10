@@ -388,7 +388,7 @@ export function CustodyOutForm() {
                className={serialEquipment || equipmentAvailable === 0 ? 'cursor-not-allowed bg-muted' : ''}
              />
            </Field>
-          <Field label="مكان العهدة" required><Input value={location} onChange={(e) => { setLocationValue(e.target.value); setConfirming(false); }} placeholder="مثال: سيارة الإسعاف 12" /></Field>
+           <Field label="مكان العهدة" required><Input value={location} onChange={(e) => { setLocationValue(e.target.value); setConfirming(false); }} placeholder="مثال: قسم التجهيزات - مستودع المزة" /></Field>
         </div>
         <Field label="ملاحظات"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-24" /></Field>
          {selectedEquipment && (

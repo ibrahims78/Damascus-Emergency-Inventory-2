@@ -10,7 +10,7 @@ async function seed() {
     { name: "ثوابت", type: "consumable" as const },
     { name: "مستهلكات طبية", type: "consumable" as const },
     { name: "مستهلكات متنوعة", type: "consumable" as const },
-    { name: "مستلزمات إسعافية", type: "consumable" as const },
+    { name: "مستلزمات صحية", type: "consumable" as const },
     { name: "تجهيزات", type: "equipment" as const },
   ];
 
@@ -52,11 +52,11 @@ async function seed() {
 
   // Seed recipients
   const recipients = [
-    { name: "مركز الإسعاف المركزي" },
-    { name: "مركز إسعاف المزة" },
-    { name: "مركز إسعاف كفرسوسة" },
-    { name: "مركز إسعاف ركن الدين" },
-    { name: "مركز إسعاف الميدان" },
+    { name: "المستودع المركزي لمديرية صحة دمشق" },
+    { name: "مركز صحي المزة" },
+    { name: "مركز صحي كفرسوسة" },
+    { name: "مركز صحي ركن الدين" },
+    { name: "مركز صحي الميدان" },
     { name: "مستشفى المجتهد" },
     { name: "مستشفى ابن النفيس" },
     { name: "المستشفى الجامعي" },
@@ -72,7 +72,7 @@ async function seed() {
 
   // Seed exit reasons
   const exitReasons = [
-    { name: "صرف لمركز إسعاف" },
+    { name: "صرف لمرفق صحي" },
     { name: "صرف لمستشفى" },
     { name: "صرف داخلي" },
     { name: "تلف / انتهاء صلاحية" },

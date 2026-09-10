@@ -11,5 +11,6 @@ export type OutTransactionInputDeliveryDestination = typeof OutTransactionInputD
 
 export const OutTransactionInputDeliveryDestination = {
   administrative_building: 'administrative_building',
+  health_facility: 'health_facility',
   ambulance_point: 'ambulance_point',
 } as const;

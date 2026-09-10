@@ -1,4 +1,4 @@
-﻿# Damascus-Emergency-Inventory-autoclaw — إيقاف البيئة (API + Web)
+﻿# مستودعات مديرية صحة دمشق — إيقاف البيئة (API + Web)
 $ports = @(8080, 22333)
 foreach ($port in $ports) {
     $pids = netstat -ano | Select-String ":$port.*LISTENING" | ForEach-Object { ($_ -split '\s+')[-1] } | Sort-Object -Unique

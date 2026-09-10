@@ -121,15 +121,17 @@ function textOrNull(value: unknown): string | null {
   return valueAsText || null;
 }
 
-function assertDeliveryDestination(value: unknown): "administrative_building" | "ambulance_point" {
+function assertDeliveryDestination(
+  value: unknown,
+): "administrative_building" | "health_facility" | "ambulance_point" {
   const destination = assertNonEmpty(value, "جهة التسليم");
   if (!DELIVERY_DESTINATIONS.includes(destination as (typeof DELIVERY_DESTINATIONS)[number])) {
     throw new InventoryMovementError(
       "INVALID_DELIVERY_DESTINATION",
-      "جهة التسليم يجب أن تكون مبنى إداريًا أو نقطة إسعاف",
+      "جهة التسليم يجب أن تكون مبنى إداريًا أو مرفقًا صحيًا",
     );
   }
-  return destination as "administrative_building" | "ambulance_point";
+  return destination as "administrative_building" | "health_facility" | "ambulance_point";
 }
 
 function parseOptionalId(value: unknown): number | null {
@@ -372,6 +374,7 @@ async function insertTransaction(
       ),
       deliveryDestination: textOrNull(input.deliveryDestination) as
         | "administrative_building"
+        | "health_facility"
         | "ambulance_point"
         | null,
       custodyHolderNameSnap: textOrNull(input.holderName),

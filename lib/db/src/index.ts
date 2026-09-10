@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { drizzle as drizzlePostgres } from "drizzle-orm/node-postgres";
-import { and, like, ne, or } from "drizzle-orm";
+import { and, eq, like, ne, or } from "drizzle-orm";
 import pg from "pg";
 import * as schema from "./schema";
 import { DEFAULT_ORG_NAME } from "./schema/system-settings";
@@ -110,6 +110,26 @@ async function initializeDesktopDatabase(): Promise<void> {
     );
     await desktopClient.exec(
       `ALTER TABLE inventory_batches ADD COLUMN IF NOT EXISTS supplier text;`,
+    );
+    await desktopClient.exec(
+      `DO $delivery_destination_migration$
+       BEGIN
+         IF EXISTS (
+           SELECT 1
+           FROM pg_constraint
+           WHERE conname = 'transactions_delivery_destination_valid'
+         ) THEN
+           ALTER TABLE transactions
+             DROP CONSTRAINT transactions_delivery_destination_valid;
+         END IF;
+         ALTER TABLE transactions
+           ADD CONSTRAINT transactions_delivery_destination_valid
+           CHECK (
+             delivery_destination IS NULL OR
+             delivery_destination IN ('administrative_building', 'health_facility', 'ambulance_point')
+           );
+       END
+       $delivery_destination_migration$;`,
     );
     await desktopClient.exec(
       `CREATE INDEX IF NOT EXISTS inventory_batches_item_fefo_idx ON inventory_batches (item_id, expiry_date, id) WHERE remaining_quantity > 0;`,
@@ -237,8 +257,17 @@ async function normalizeLegacyOrganizationName(): Promise<void> {
     );
 }
 
+async function normalizeLegacyDeliveryDestination(): Promise<void> {
+  await db
+    .update(schema.transactionsTable)
+    .set({ deliveryDestination: "health_facility" })
+    .where(eq(schema.transactionsTable.deliveryDestination, "ambulance_point"));
+}
+
 export const databaseReady = isDesktopMode
-  ? initializeDesktopDatabase().then(normalizeLegacyOrganizationName)
-  : normalizeLegacyOrganizationName();
+  ? initializeDesktopDatabase()
+      .then(normalizeLegacyOrganizationName)
+      .then(normalizeLegacyDeliveryDestination)
+  : normalizeLegacyOrganizationName().then(normalizeLegacyDeliveryDestination);
 
 export * from "./schema";
