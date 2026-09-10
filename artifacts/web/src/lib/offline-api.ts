@@ -1,4 +1,9 @@
 import { dmePackageSummary, readDmeSyncPackageInWorker, writeDmeSyncPackage } from './dme-sync-browser';
+import {
+  createCategoryLookup,
+  normalizeHeader,
+  validateInventoryImportRows,
+} from '@workspace/api-zod';
 
 type PublicUser = {
   id: number;
@@ -1048,22 +1053,65 @@ async function route(pathname: string, searchParams: URLSearchParams, method: st
     return mutate((state) => {
       const body = readBody(init);
       const input = Array.isArray(body) ? body : Array.isArray((body as { items?: unknown }).items) ? (body as { items: unknown[] }).items : [];
+      const mode = searchParams.get('mode') === 'upsert' ? 'upsert' as const : 'insert' as const;
+      const categories = createCategoryLookup(state.categories);
+      const existingByCode = new Map(
+        state.items
+          .filter((item) => item.isActive !== false && text(item.code))
+          .map((item) => [text(item.code), {
+            id: numberValue(item.id),
+            code: text(item.code) || null,
+            name: text(item.name),
+            requiresExpiryTracking: Boolean(item.requiresExpiryTracking),
+            requiresBatchTracking: Boolean(item.requiresBatchTracking),
+          }]),
+      );
+      const decisions = validateInventoryImportRows(
+        input.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'),
+        { mode, categories, existingByCode },
+      );
       let created = 0;
       let updated = 0;
       const errors: Array<{ row: number; name: string; error: string }> = [];
-      for (const [index, entry] of input.entries()) {
-        const value = (entry ?? {}) as Record<string, unknown>;
-        const name = text(value.name);
-        if (!name) {
-          errors.push({ row: index + 2, name: '', error: 'اسم المادة مطلوب' });
+      const warnings: Array<{ row: number; name: string; warning: string }> = [];
+      for (const decision of decisions) {
+        const row = decision.row;
+        const name = row.name || `صف ${row.rowNumber}`;
+        for (const warning of decision.warnings) {
+          warnings.push({ row: row.rowNumber, name, warning: warning.message });
+        }
+        if (decision.errors.length) {
+          errors.push({
+            row: row.rowNumber,
+            name,
+            error: decision.errors.map((issue) => issue.message).join('؛ '),
+          });
           continue;
         }
-        const existing = value.code
-          ? state.items.find((item) => item.isActive !== false && item.code === value.code)
+        const categoryId = row.categoryName ? categories.get(normalizeHeader(row.categoryName)) ?? null : null;
+        const existing = decision.existingItem
+          ? state.items.find((item) => numberValue(item.id) === decision.existingItem?.id)
           : undefined;
-        const categoryName = text(value.categoryName);
-        if (!value.categoryId && categoryName) {
-          value.categoryId = state.categories.find((category) => category.name === categoryName)?.id ?? 1;
+        const value: Record<string, unknown> = {
+          code: row.code,
+          name: row.name,
+          categoryId,
+          itemType: 'item',
+          unit: row.unit,
+          minStock: row.minStock ?? 0,
+          location: row.location,
+          notes: row.notes,
+        };
+        if (existing) {
+          value.currentStock = existing.currentStock;
+          value.expiryDate = existing.expiryDate;
+          value.batchNumber = existing.batchNumber;
+          value.supplier = existing.supplier;
+        } else {
+          value.currentStock = row.currentStock ?? 0;
+          value.expiryDate = row.expiryDate;
+          value.batchNumber = row.batchNumber;
+          value.supplier = row.supplier;
         }
         const item = itemFromInput(state, value, existing);
         if (existing) {
@@ -1072,10 +1120,31 @@ async function route(pathname: string, searchParams: URLSearchParams, method: st
         } else {
           state.items.push(item);
           created += 1;
+          if ((row.currentStock ?? 0) > 0) {
+            const batch = {
+              id: nextId(state),
+              itemId: item.id,
+              batchNumber: row.batchNumber,
+              receivedQuantity: row.currentStock,
+              remainingQuantity: row.currentStock,
+              expiryDate: row.expiryDate,
+              supplier: row.supplier,
+              deliveryNoteNumber: `افتتاحي-${item.id}`,
+              deliveryNoteDate: now().slice(0, 10),
+            };
+            state.inventoryBatches.push(batch);
+            recordOfflineChange(state, 'inventory_batch', Number(batch.id), 'create', {
+              ...batch,
+              itemGlobalId: state.entityIds.find((entry) => entry.entityType === 'item' && entry.localId === Number(item.id))?.globalId ?? null,
+            });
+          }
         }
-        recordOfflineChange(state, 'item', Number(item.id), existing ? 'update' : 'create', { name: item.name, quantity: item.currentStock });
+        recordOfflineChange(state, 'item', Number(item.id), existing ? 'update' : 'create', {
+          name: item.name,
+          quantity: existing ? existing.currentStock : item.currentStock,
+        });
       }
-      return json({ created, updated, inserted: created, skipped: errors.length, errors });
+      return json({ created, updated, inserted: created, skipped: errors.length, errors, warnings });
     });
   }
 

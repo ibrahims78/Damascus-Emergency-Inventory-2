@@ -20,6 +20,11 @@ import {
   type FefoBatch,
 } from "../lib/inventory-movement-core";
 import {
+  createCategoryLookup,
+  normalizeHeader,
+  validateInventoryImportRows,
+} from "@workspace/api-zod";
+import {
   getItemHistory,
   ITEM_HISTORY_TYPES,
   type ItemHistoryType,
@@ -323,85 +328,78 @@ router.post(
       const allCategories = await db
         .select({ id: categoriesTable.id, name: categoriesTable.name })
         .from(categoriesTable);
-      const categoryMap = new Map(
-        allCategories.map((c) => [c.name.trim().toLowerCase(), c.id])
-      );
-
       const mode = (req.query.mode as string) === "upsert" ? "upsert" : "insert";
-
-      // In upsert mode, pre-fetch existing codes (one query) for insert-vs-update tracking
-      const existingCodes = new Set<string>();
-      if (mode === "upsert") {
-        const existing = await db
-          .select({ code: itemsTable.code })
-          .from(itemsTable)
-          .where(isNotNull(itemsTable.code));
-        existing.forEach((r) => { if (r.code) existingCodes.add(r.code); });
-      }
+      const categoryMap = createCategoryLookup(allCategories);
+      const existing = await db
+        .select({
+          id: itemsTable.id,
+          code: itemsTable.code,
+          name: itemsTable.name,
+          requiresExpiryTracking: itemsTable.requiresExpiryTracking,
+          requiresBatchTracking: itemsTable.requiresBatchTracking,
+        })
+        .from(itemsTable)
+        .where(isNotNull(itemsTable.code));
+      const existingByCode = new Map(
+        existing
+          .filter((item) => item.code)
+          .map((item) => [item.code!.trim(), item]),
+      );
+      const decisions = validateInventoryImportRows(items, {
+        mode,
+        categories: categoryMap,
+        existingByCode,
+      });
 
       const results: {
         created: number;
         updated: number;
         errors: { row: number; name: string; error: string }[];
-      } = { created: 0, updated: 0, errors: [] };
+        warnings: { row: number; name: string; warning: string }[];
+      } = { created: 0, updated: 0, errors: [], warnings: [] };
 
       const bulkNode = await ensureNodeIdentity("web");
 
       for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        const rowNum = i + 2; // Excel row (header = row 1)
-        const name = String(item.name ?? "").trim();
-        const unit = String(item.unit ?? "").trim();
-
-        if (!name) {
-          results.errors.push({ row: rowNum, name: `صف ${rowNum}`, error: "الاسم مطلوب" });
-          continue;
+        const decision = decisions[i];
+        const rowNum = decision.row.rowNumber;
+        const name = decision.row.name || `صف ${rowNum}`;
+        if (decision.warnings.length) {
+          for (const warning of decision.warnings) {
+            results.warnings.push({ row: rowNum, name, warning: warning.message });
+          }
         }
-        if (!unit) {
-          results.errors.push({ row: rowNum, name, error: "الوحدة مطلوبة" });
-          continue;
-        }
-
-        // Resolve category name → id
-        let categoryId: number | null = null;
-        if (item.categoryName) {
-          const resolved = categoryMap.get(String(item.categoryName).trim().toLowerCase());
-          if (resolved !== undefined) categoryId = resolved;
-        }
-
-        const currentStock = parseNonNegativeInteger(item.currentStock, 0);
-        const minStock = parseNonNegativeInteger(item.minStock, 0);
-
-        if (currentStock === null) {
-          results.errors.push({ row: rowNum, name, error: "الكمية الحالية يجب أن تكون عدداً صحيحاً غير سالب" });
-          continue;
-        }
-        if (minStock === null) {
-          results.errors.push({ row: rowNum, name, error: "الحد الأدنى يجب أن يكون عدداً صحيحاً غير سالب" });
+        if (decision.errors.length) {
+          results.errors.push({
+            row: rowNum,
+            name,
+            error: decision.errors.map((issue) => issue.message).join("؛ "),
+          });
           continue;
         }
 
-        const code = item.code ? String(item.code).trim() : null;
-        const expiryDate = item.expiryDate ? String(item.expiryDate).trim() : "";
-        if (expiryDate && !isValidIsoDate(expiryDate)) {
-          results.errors.push({ row: rowNum, name, error: "تاريخ الصلاحية غير صالح ويجب أن يكون بصيغة YYYY-MM-DD" });
-          continue;
-        }
-        const isUpdate = mode === "upsert" && code !== null && existingCodes.has(code);
+        const row = decision.row;
+        const categoryId = row.categoryName
+          ? categoryMap.get(normalizeHeader(row.categoryName)) ?? null
+          : null;
+        const currentStock = row.currentStock ?? 0;
+        const minStock = row.minStock ?? 0;
+        const code = row.code;
+        const isUpdate = Boolean(decision.existingItem);
 
         const values = {
           code,
           name,
           categoryId,
           itemType: "item" as const,
-          unit,
+          unit: row.unit,
           currentStock,
           minStock,
-          expiryDate: expiryDate || null,
-          batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
-          location: item.location ? String(item.location).trim() : null,
-          supplier: item.supplier ? String(item.supplier).trim() : null,
-          notes: item.notes ? String(item.notes).trim() : null,
+          expiryDate: row.expiryDate,
+          batchNumber: row.batchNumber,
+          location: row.location,
+          supplier: row.supplier,
+          notes: row.notes,
         };
 
         try {
@@ -416,12 +414,8 @@ router.post(
                     name: values.name,
                     categoryId: values.categoryId,
                     unit: values.unit,
-                    currentStock: values.currentStock,
                     minStock: values.minStock,
-                    expiryDate: values.expiryDate,
-                    batchNumber: values.batchNumber,
                     location: values.location,
-                    supplier: values.supplier,
                     notes: values.notes,
                   },
                 })
@@ -450,7 +444,6 @@ router.post(
               });
             } else {
               results.created++;
-              if (code !== null) existingCodes.add(code);
               await auditLog({
                 req, action: "create", entityType: "item", entityId: saved.id,
                 details: { name: saved.name, source: "bulk-import" },
@@ -479,7 +472,10 @@ router.post(
                   itemId: row.id,
                   receivedQuantity: row.currentStock,
                   remainingQuantity: row.currentStock,
-                  deliveryNoteNumber: `افتتاحي-${row.id}`,
+                   batchNumber: row.batchNumber,
+                   expiryDate: row.expiryDate,
+                   supplier: row.supplier,
+                   deliveryNoteNumber: `افتتاحي-${row.id}`,
                   deliveryNoteDate: openingDate,
                   supplySource: "central_warehouses",
                 }).returning();
@@ -496,7 +492,6 @@ router.post(
               return [row];
             });
             results.created++;
-            if (code !== null) existingCodes.add(code);
             await auditLog({
               req, action: "create", entityType: "item", entityId: created.id,
               details: { name: created.name, source: "bulk-import" },

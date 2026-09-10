@@ -46,6 +46,12 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { downloadFile } from '@/lib/file-download';
+import {
+  INVENTORY_SHEET_NAMES,
+  INVENTORY_TEMPLATE_COLUMNS,
+  INVENTORY_TEMPLATE_VERSION,
+  normalizeInventoryRow,
+} from '@workspace/api-zod';
 interface SystemSettings {
   id: number;
   orgName: string;
@@ -142,51 +148,66 @@ export function ImportTab() {
 
   const handleExportTemplate = async () => {
     const XLSX = await import('xlsx');
+    const itemHeaders = INVENTORY_TEMPLATE_COLUMNS.items.map((column) => column.label);
+    const batchHeaders = INVENTORY_TEMPLATE_COLUMNS.openingBatches.map((column) => column.label);
+    const dataWs = XLSX.utils.aoa_to_sheet([itemHeaders]);
+    const batchWs = XLSX.utils.aoa_to_sheet([batchHeaders]);
+    const applySheetDefaults = (sheet: Record<string, unknown>, widths: number[], ref: string) => {
+      sheet['!cols'] = widths.map((wch) => ({ wch }));
+      sheet['!freeze'] = { xSplit: 0, ySplit: 1 };
+      sheet['!autofilter'] = { ref };
+    };
+    applySheetDefaults(dataWs, [14, 30, 14, 22, 16, 20, 30], 'A1:G1000');
+    applySheetDefaults(batchWs, [16, 18, 16, 18, 22, 20, 20], 'A1:G1000');
 
-    // Sheet 1: Data headers only — user fills in
-    const dataHeaders = [
-      'الرمز', 'الاسم *', 'الوحدة *', 'التصنيف',
-      'الكمية الحالية', 'الحد الأدنى',
-      'تاريخ الانتهاء', 'رقم الدفعة', 'الموقع', 'المورد', 'ملاحظات',
-    ];
-    const dataWs = XLSX.utils.aoa_to_sheet([dataHeaders]);
-    dataWs['!cols'] = [
-      { wch: 14 }, { wch: 30 }, { wch: 14 }, { wch: 22 },
-      { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 14 },
-      { wch: 16 }, { wch: 22 }, { wch: 26 },
-    ];
-
-    // Sheet 2: Instructions
     const catList = categories.length
       ? categories.map((c) => c.name).join(' — ')
       : 'أضف التصنيفات أولاً من تبويب التصنيفات';
     const instrRows = [
-      ['تعليمات الاستخدام — نموذج استيراد المواد'],
+      [`نموذج استيراد المخزون — الإصدار ${INVENTORY_TEMPLATE_VERSION}`],
       [],
-      ['العمود', 'الوصف', 'مطلوب؟', 'ملاحظات'],
-      ['الرمز', 'رمز أو كود المادة', 'لا', 'يجب أن يكون فريداً إذا أُدخل'],
-      ['الاسم *', 'اسم المادة', 'نعم', ''],
-      ['الوحدة *', 'وحدة القياس (مثال: قطعة، رول، لتر)', 'نعم', ''],
-      ['التصنيف', 'اسم التصنيف كما هو في النظام', 'لا', catList],
-      ['الكمية الحالية', 'الكمية المتوفرة حالياً', 'لا', 'رقم صحيح ≥ 0 — افتراضي: 0'],
-      ['الحد الأدنى', 'الحد الأدنى لإطلاق تنبيه النقص', 'لا', 'رقم صحيح ≥ 0 — افتراضي: 0'],
-      ['تاريخ الانتهاء', 'تاريخ انتهاء الصلاحية', 'لا', 'الصيغة: YYYY-MM-DD مثال: 2026-12-31'],
-      ['رقم الدفعة', 'رقم دفعة الإنتاج', 'لا', ''],
-      ['الموقع', 'موقع التخزين داخل المستودع', 'لا', ''],
-      ['المورد', 'اسم المورد أو الشركة', 'لا', ''],
-      ['ملاحظات', 'أي ملاحظات إضافية', 'لا', ''],
+      ['الورقة', 'الاستخدام', 'ملاحظات'],
+      [INVENTORY_SHEET_NAMES.items, 'تعريف المواد', 'اكتب مادة واحدة في كل صف. الاسم والوحدة مطلوبان.'],
+      [INVENTORY_SHEET_NAMES.openingBatches, 'الأرصدة والدفعات الافتتاحية', 'استخدم رمز المادة. يمكن إضافة عدة دفعات للمادة نفسها.'],
+      [INVENTORY_SHEET_NAMES.referenceValues, 'القيم المرجعية', 'لا تغيّر أسماء الأوراق أو الرؤوس.'],
       [],
-      ['مثال على صف بيانات:'],
-      ['MED-001', 'شاش طبي معقم', 'رول', categories[0]?.name ?? '', '50', '10', '2026-12-31', 'B-2024', 'رف A3', 'شركة الأدوية الوطنية', ''],
+      ['قواعد التعبئة'],
+      ['الرمز', 'اكتبه كنص للحفاظ على الأصفار البادئة، مثل 0007.'],
+      ['التاريخ', 'استخدم YYYY-MM-DD. يقبل المستورد أيضًا تاريخ Excel الرقمي.'],
+      ['الكمية', 'عدد صحيح غير سالب. لا تستخدم رصيد المادة الموجودة لتغيير مخزونها.'],
+      ['التصنيف والوحدة', 'استخدم القيم الموجودة في ورقة القيم المرجعية عندما تكون متاحة.'],
+      ['التوافق', 'لا تغيّر أسماء الأوراق أو أسماء الرؤوس. تُقبل المرادفات العربية والقديمة عند الرفع.'],
+      [],
+      ['مثال تعبئة — للتوضيح فقط، وليس في ورقة البيانات'],
+      ['MED-0007', 'شاش طبي معقم', 'رول', categories[0]?.name ?? '', 10, 'رف A3', ''],
+      [],
+      ['ملاحظة', 'صفوف ورقة البيانات تبدأ فارغة عمدًا. أدخل الدفعات الافتتاحية في ورقتها المستقلة.'],
     ];
     const instrWs = XLSX.utils.aoa_to_sheet(instrRows);
-    instrWs['!cols'] = [
-      { wch: 20 }, { wch: 36 }, { wch: 10 }, { wch: 55 },
+    applySheetDefaults(instrWs, [32, 64, 56], 'A1:C30');
+
+    const referenceValues = [
+      ['التصنيفات', 'الوحدات'],
+      ...Array.from({ length: Math.max(categories.length, DEFAULT_UNITS.length) }, (_, index) => [
+        categories[index]?.name ?? '',
+        DEFAULT_UNITS[index] ?? '',
+      ]),
+    ];
+    const referenceWs = XLSX.utils.aoa_to_sheet(referenceValues);
+    applySheetDefaults(referenceWs, [30, 20], 'A1:B100');
+    (dataWs as Record<string, unknown>)['!dataValidation'] = [
+      { sqref: 'D2:D1000', type: 'list', formula1: `'${INVENTORY_SHEET_NAMES.referenceValues}'!$A$2:$A$100` },
+      { sqref: 'E2:E1000', type: 'whole', operator: 'greaterThanOrEqual', formula1: '0' },
+    ];
+    (batchWs as Record<string, unknown>)['!dataValidation'] = [
+      { sqref: 'B2:B1000', type: 'whole', operator: 'greaterThanOrEqual', formula1: '0' },
     ];
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, dataWs, 'البيانات');
-    XLSX.utils.book_append_sheet(wb, instrWs, 'التعليمات');
+    XLSX.utils.book_append_sheet(wb, dataWs, INVENTORY_SHEET_NAMES.items);
+    XLSX.utils.book_append_sheet(wb, batchWs, INVENTORY_SHEET_NAMES.openingBatches);
+    XLSX.utils.book_append_sheet(wb, instrWs, INVENTORY_SHEET_NAMES.instructions);
+    XLSX.utils.book_append_sheet(wb, referenceWs, INVENTORY_SHEET_NAMES.referenceValues);
     const workbookBytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     await downloadFile(
       new Blob([workbookBytes], {
@@ -211,8 +232,10 @@ export function ImportTab() {
       const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false });
 
       // Prefer "البيانات" sheet, otherwise first sheet
-      const sheetName = wb.SheetNames.includes('البيانات')
-        ? 'البيانات'
+      const sheetName = wb.SheetNames.includes(INVENTORY_SHEET_NAMES.items)
+        ? INVENTORY_SHEET_NAMES.items
+        : wb.SheetNames.includes('البيانات')
+          ? 'البيانات'
         : wb.SheetNames[0];
       const ws = wb.Sheets[sheetName];
       const data = XLSX.utils.sheet_to_json<ImportRow>(ws, { defval: '' });
@@ -238,19 +261,22 @@ export function ImportTab() {
     setImporting(true);
     setResult(null);
 
-    const payload = rows.map((r) => ({
-      code: String(r['الرمز'] ?? '').trim() || null,
-      name: getName(r),
-      unit: getUnit(r),
-      categoryName: String(r['التصنيف'] ?? '').trim() || null,
-      currentStock: r['الكمية الحالية'] ?? 0,
-      minStock: r['الحد الأدنى'] ?? 0,
-      expiryDate: String(r['تاريخ الانتهاء'] ?? '').trim() || null,
-      batchNumber: String(r['رقم الدفعة'] ?? '').trim() || null,
-      location: String(r['الموقع'] ?? '').trim() || null,
-      supplier: String(r['المورد'] ?? '').trim() || null,
-      notes: String(r['ملاحظات'] ?? '').trim() || null,
-    }));
+    const payload = rows.map((r, index) => {
+      const normalized = normalizeInventoryRow(r, index + 2);
+      return {
+        code: normalized.code,
+        name: normalized.name,
+        unit: normalized.unit,
+        categoryName: normalized.categoryName,
+        currentStock: normalized.currentStock,
+        minStock: normalized.minStock,
+        expiryDate: normalized.expiryDate,
+        batchNumber: normalized.batchNumber,
+        location: normalized.location,
+        supplier: normalized.supplier,
+        notes: normalized.notes,
+      };
+    });
 
     try {
       const res = await fetch(`/api/items/bulk-import?mode=${importMode}`, {
@@ -827,6 +853,7 @@ interface ImportResult {
   created: number;
   updated?: number;
   errors: { row: number; name: string; error: string }[];
+  warnings?: { row: number; name: string; warning: string }[];
 }
 
 
