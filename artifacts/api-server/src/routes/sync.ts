@@ -390,6 +390,7 @@ async function peerFetch<T>(
   password: string,
   init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<T> {
+  const peerTimeoutMs = Number(process.env.SYNC_PEER_TIMEOUT_MS ?? 30_000);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
@@ -399,7 +400,9 @@ async function peerFetch<T>(
     method: init.method ?? "GET",
     headers,
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(
+      Number.isFinite(peerTimeoutMs) && peerTimeoutMs > 0 ? peerTimeoutMs : 30_000,
+    ),
   });
   const data = (await response.json().catch(() => ({}))) as T & { error?: string };
   if (!response.ok) {

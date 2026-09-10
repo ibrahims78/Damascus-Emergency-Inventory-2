@@ -49,11 +49,28 @@ localPort = 8091
 externalPort = 3000
 
 [[ports]]
+localPort = 8181
+externalPort = 5000
+
+[[ports]]
+localPort = 8182
+externalPort = 5173
+
+[[ports]]
+localPort = 8183
+externalPort = 6000
+
+[[ports]]
+localPort = 8184
+externalPort = 6800
+
+[[ports]]
 localPort = 22333
 externalPort = 3001
 
 [nix]
 channel = "stable-25_05"
+packages = ["libreoffice"]
 
 [postMerge]
 path = "scripts/post-merge.sh"

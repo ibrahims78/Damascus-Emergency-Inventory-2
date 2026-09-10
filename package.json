@@ -8,6 +8,7 @@
     "build:standard": "pnpm --filter @workspace/web run build:standard && pnpm --filter @workspace/api-server run build:standard",
     "build:protected": "pnpm --filter @workspace/web run build:protected && pnpm --filter @workspace/api-server run build:protected",
     "build:android:offline": "VITE_OFFLINE_MODE=1 BASE_PATH=/ pnpm --filter @workspace/web run build && pnpm exec cap sync android && cd android && ./gradlew assembleRelease --no-daemon",
+    "acceptance:inventory": "pnpm --filter @workspace/scripts exec node inventory-acceptance.mjs",
     "protected:keygen": "node scripts/generate-protected-key.mjs",
     "phase0:fixtures": "pnpm --filter @workspace/scripts exec node generate-phase0-fixtures.mjs",
     "phase0:baseline": "pnpm --filter @workspace/scripts exec node phase0-baseline.mjs",

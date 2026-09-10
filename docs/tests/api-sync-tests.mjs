@@ -5,6 +5,7 @@ const ADMIN_PW = process.env.SEED_ADMIN_PASSWORD ?? '***';
 const A = process.env.SYNC_A || 'http://127.0.0.1:8080';
 const B = process.env.SYNC_B || 'http://127.0.0.1:8081';
 const PASSWORD = 'SyncTest!2026';
+const REQUEST_TIMEOUT_MS = Number(process.env.SYNC_REQUEST_TIMEOUT_MS || 30_000);
 
 const results = { pass: 0, fail: 0, failures: [] };
 const t = async (name, fn) => {
@@ -24,6 +25,7 @@ function makeClient(base) {
     async api(path, opts = {}) {
       const res = await fetch(`${base}${path}`, {
         ...opts,
+        signal: opts.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         headers: { 'Content-Type': 'application/json', ...(cookie ? { cookie } : {}), ...(opts.headers || {}) },
       });
       const setCookie = res.headers.get('set-cookie');
