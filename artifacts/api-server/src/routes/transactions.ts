@@ -254,7 +254,7 @@ router.get("/:id/print", requireAuth, async (req, res) => {
     res.json({
       transaction,
       organizationName:
-        settings?.orgName ?? "منظومة الاحالة و الاسعاف و الطوارئ - دمشق",
+        settings?.orgName ?? "مستودعات مديرية صحة دمشق",
       orgSubtitle: settings?.orgSubtitle ?? null,
       printedAt: new Date().toISOString(),
     });

@@ -3,8 +3,10 @@ import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { drizzle as drizzlePostgres } from "drizzle-orm/node-postgres";
+import { and, like, ne, or } from "drizzle-orm";
 import pg from "pg";
 import * as schema from "./schema";
+import { DEFAULT_ORG_NAME } from "./schema/system-settings";
 
 const { Pool } = pg;
 
@@ -214,8 +216,29 @@ async function initializeDesktopDatabase(): Promise<void> {
   }
 }
 
+async function normalizeLegacyOrganizationName(): Promise<void> {
+  await db
+    .update(schema.systemSettingsTable)
+    .set({ orgName: DEFAULT_ORG_NAME })
+    .where(
+      and(
+        ne(schema.systemSettingsTable.orgName, DEFAULT_ORG_NAME),
+        or(
+          like(schema.systemSettingsTable.orgName, "منظومة %"),
+          like(schema.systemSettingsTable.orgName, "نظام %"),
+        ),
+        or(
+          like(schema.systemSettingsTable.orgName, "%الإحالة%"),
+          like(schema.systemSettingsTable.orgName, "%الاحالة%"),
+          like(schema.systemSettingsTable.orgName, "%الإسعاف والطوارئ%"),
+          like(schema.systemSettingsTable.orgName, "%الاسعاف والطوارئ%"),
+        ),
+      ),
+    );
+}
+
 export const databaseReady = isDesktopMode
-  ? initializeDesktopDatabase()
-  : Promise.resolve();
+  ? initializeDesktopDatabase().then(normalizeLegacyOrganizationName)
+  : normalizeLegacyOrganizationName();
 
 export * from "./schema";

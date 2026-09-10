@@ -116,7 +116,7 @@ export function ProtectedBuildGate({ children }: { children: React.ReactNode }) 
         <div className="mb-6 text-center">
           <div className="mb-3 text-4xl" aria-hidden="true">🔐</div>
           <h1 className="text-2xl font-bold text-sky-300">نسخة محمية</h1>
-          <p className="mt-2 text-sm text-slate-400">نظام مستودع الإسعاف والطوارئ — دمشق</p>
+          <p className="mt-2 text-sm text-slate-400">مستودعات مديرية صحة دمشق</p>
         </div>
 
         <div className="rounded-xl border border-sky-700/70 bg-slate-950 p-4 text-center">

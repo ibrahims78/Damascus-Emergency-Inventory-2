@@ -156,7 +156,7 @@ export function OrgTab() {
       <div className="space-y-1.5">
         <Label htmlFor="orgName">اسم المنظومة <span className="text-destructive">*</span></Label>
         <Input id="orgName" value={orgName} onChange={(e) => setOrgName(e.target.value)}
-          placeholder="منظومة الاحالة و الاسعاف و الطوارئ - دمشق" />
+        placeholder="مستودعات مديرية صحة دمشق" />
         <p className="text-xs text-muted-foreground">يظهر في رأس سندات الإدخال والإخراج</p>
       </div>
 

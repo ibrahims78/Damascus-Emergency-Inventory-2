@@ -317,8 +317,8 @@ export function AuditPage() {
       const workbook = XLSX.utils.book_new();
       workbook.Props = {
         Title: 'سجل التدقيق',
-        Subject: 'سجل التدقيق — منظومة مستودع الإسعاف والطوارئ',
-        Author: 'منظومة مستودع الإسعاف والطوارئ',
+        Subject: 'سجل التدقيق — مستودعات مديرية صحة دمشق',
+        Author: 'مستودعات مديرية صحة دمشق',
         CreatedDate: new Date(),
       };
       XLSX.utils.book_append_sheet(workbook, worksheet, 'سجل التدقيق');

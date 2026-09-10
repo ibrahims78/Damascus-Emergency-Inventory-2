@@ -143,7 +143,7 @@ export function Sidebar() {
         >
           <img
             src={logoUrl}
-            alt="شعار منظومة الإحالة والإسعاف والطوارئ"
+            alt="شعار مستودعات مديرية صحة دمشق"
             className={cn(
               'object-contain rounded-full border shadow-sm flex-shrink-0 transition-all duration-300',
               collapsed ? 'w-9 h-9' : 'w-12 h-12',
@@ -152,7 +152,7 @@ export function Sidebar() {
           {!collapsed && (
             <div className="min-w-0">
               <h1 className="font-bold text-sm text-foreground leading-snug">
-                منظومة الإحالة والإسعاف والطوارئ — دمشق
+                مستودعات مديرية صحة دمشق
               </h1>
             </div>
           )}

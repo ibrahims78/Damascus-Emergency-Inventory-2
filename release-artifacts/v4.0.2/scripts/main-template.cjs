@@ -306,7 +306,7 @@ app.whenReady().then(async () => {
     console.error(error);
     await dialog.showMessageBox({
       type: "error",
-      title: "Damascus Emergency Inventory",
+      title: "مستودعات مديرية صحة دمشق",
 message: "تعذر تشغيل تطبيق سطح المكتب.",
       detail: error instanceof Error ? error.message : String(error),
     });
@@ -325,8 +325,8 @@ app.on("before-quit", () => {
 });
 
 app.setAboutPanelOptions({
-  applicationName: "Damascus Emergency Inventory",
+  applicationName: "مستودعات مديرية صحة دمشق",
   applicationVersion: RELEASE_VERSION,
   version: RELEASE_VERSION,
-  copyright: "Damascus Emergency Inventory",
+  copyright: "مستودعات مديرية صحة دمشق",
 });

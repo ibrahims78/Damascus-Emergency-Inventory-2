@@ -331,7 +331,7 @@ export function HelpPage() {
         <div className="absolute -bottom-20 right-10 h-56 w-56 rounded-full bg-cyan-300/10 blur-3xl" />
         <div className="relative max-w-3xl">
           <Badge className="border-white/20 bg-white/10 text-white hover:bg-white/10">دليل المستخدم الرسمي</Badge>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-tight md:text-4xl">مركز مساعدة منظومة الإسعاف والطوارئ</h1>
+          <h1 className="mt-4 text-3xl font-extrabold tracking-tight md:text-4xl">مركز مساعدة مستودعات مديرية صحة دمشق</h1>
           <p className="mt-4 max-w-2xl text-sm leading-8 text-white/85 md:text-base">
             مرجع عملي موحد لإدارة مخزون المواد والتجهيزات الطبية في دمشق. اتبع الخطوات أدناه لتسجيل كل حركة بشكل صحيح، ثم راقب أثرها في الرصيد والتقارير.
           </p>

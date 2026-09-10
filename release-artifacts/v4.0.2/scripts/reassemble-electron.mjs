@@ -87,8 +87,8 @@ function buildVariant(variant, webSource, apiSource) {
     fs.writeFileSync(
       path.join(stage, "package.json"),
       JSON.stringify({
-        name: "damascus-emergency-inventory-desktop",
-        productName: "Damascus Emergency Inventory",
+        name: "damascus-health-directorate-warehouses-desktop",
+        productName: "مستودعات مديرية صحة دمشق",
         version,
         main: "electron/main.cjs",
       }),

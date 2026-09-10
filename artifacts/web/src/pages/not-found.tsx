@@ -13,7 +13,7 @@ export default function NotFound() {
         <CardContent className="space-y-5 p-6 text-center sm:p-8">
           <img
             src={logoUrl}
-            alt="شعار منظومة الإحالة والإسعاف والطوارئ"
+            alt="شعار مستودعات مديرية صحة دمشق"
             className="mx-auto h-20 w-20 rounded-full border bg-white p-2 object-contain shadow-sm"
           />
           <div className="space-y-2">

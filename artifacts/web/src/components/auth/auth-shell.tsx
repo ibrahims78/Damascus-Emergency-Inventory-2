@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import logoUrl from '@assets/damascus-health-directorate-logo.png';
 
-export const APP_NAME = 'منظومة الإحالة والإسعاف والطوارئ';
+export const APP_NAME = 'مستودعات مديرية صحة دمشق';
 export const APP_LOCATION = 'دمشق';
 
 export function AuthShell({ children }: { children: ReactNode }) {

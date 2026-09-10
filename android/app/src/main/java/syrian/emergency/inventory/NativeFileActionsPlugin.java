@@ -37,7 +37,7 @@ import android.util.Base64;
 public class NativeFileActionsPlugin extends Plugin {
     @PluginMethod
     public void print(PluginCall call) {
-        String title = call.getString("title", "تقرير منظومة الإسعاف والطوارئ");
+        String title = call.getString("title", "مستودعات مديرية صحة دمشق");
         WebView webView = getBridge().getWebView();
         if (webView == null) {
             call.reject("تعذر الوصول إلى صفحة الطباعة");
@@ -122,7 +122,7 @@ public class NativeFileActionsPlugin extends Plugin {
                 );
                 values.put(
                         MediaStore.Downloads.RELATIVE_PATH,
-                        Environment.DIRECTORY_DOWNLOADS + "/Damascus Emergency Inventory"
+                        Environment.DIRECTORY_DOWNLOADS + "/مستودعات مديرية صحة دمشق"
                 );
                 values.put(MediaStore.Downloads.IS_PENDING, 1);
                 uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
@@ -162,7 +162,7 @@ public class NativeFileActionsPlugin extends Plugin {
                 // user's Downloads app, so write to the public Downloads folder.
                 java.io.File downloads = new java.io.File(
                         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                        "Damascus Emergency Inventory"
+                        "مستودعات مديرية صحة دمشق"
                 );
                 if (!downloads.exists() && !downloads.mkdirs()) {
                     call.reject("تعذر إنشاء مجلد التنزيلات");
@@ -182,7 +182,7 @@ public class NativeFileActionsPlugin extends Plugin {
             JSObject result = new JSObject();
             result.put("filename", filename);
             result.put("uri", uri.toString());
-            result.put("location", "Downloads/Damascus Emergency Inventory");
+            result.put("location", "Downloads/مستودعات مديرية صحة دمشق");
             call.resolve(result);
         } catch (Exception error) {
             call.reject("تعذر حفظ ملف Excel في التنزيلات", error);

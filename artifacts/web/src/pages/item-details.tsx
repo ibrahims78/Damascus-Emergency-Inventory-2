@@ -350,7 +350,7 @@ export function ItemDetailsPage({ itemId: providedItemId }: { itemId?: number } 
       </Card>
 
       <div className="hidden print:block print:text-xs">
-        تمت طباعة البطاقة من نظام إدارة مستودع الإسعاف والطوارئ — {new Date().toLocaleDateString('ar-SY')}
+        تمت طباعة البطاقة من مستودعات مديرية صحة دمشق — {new Date().toLocaleDateString('ar-SY')}
       </div>
     </div>
   );

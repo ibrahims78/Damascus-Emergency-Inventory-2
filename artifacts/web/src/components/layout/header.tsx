@@ -371,7 +371,7 @@ export function Header() {
     <header className="h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 sticky top-0 z-30">
       <div className="min-w-0 max-w-[55%] hidden sm:block text-right" dir="rtl">
         <p className="truncate text-sm font-semibold text-foreground">
-          {systemSettings?.orgName ?? 'منظومة الإحالة والإسعاف والطوارئ'}
+          {systemSettings?.orgName ?? 'مستودعات مديرية صحة دمشق'}
         </p>
         {systemSettings?.orgSubtitle && (
           <p className="truncate text-[11px] text-muted-foreground mt-0.5">

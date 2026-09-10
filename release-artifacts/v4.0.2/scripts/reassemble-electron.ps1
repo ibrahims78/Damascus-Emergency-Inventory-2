@@ -26,7 +26,7 @@ function Rebuild-ElectronVariant {
   Copy-Item $template (Join-Path $stage 'electron\main.cjs') -Force
   $preloadSrc = Join-Path $root 'release-artifacts\v3\electron\preload.cjs'
   if (Test-Path $preloadSrc) { Copy-Item $preloadSrc (Join-Path $stage 'electron\preload.cjs') -Force }
-  $pkgJson = '{"name":"damascus-emergency-inventory-desktop","productName":"Damascus Emergency Inventory","version":"4.0.2","main":"electron/main.cjs"}'
+  $pkgJson = '{"name":"damascus-health-directorate-warehouses-desktop","productName":"مستودعات مديرية صحة دمشق","version":"4.0.2","main":"electron/main.cjs"}'
   [System.IO.File]::WriteAllText((Join-Path $stage 'package.json'), $pkgJson, $utf8)
 
   New-Item -ItemType Directory -Path (Join-Path $stage 'app') -Force | Out-Null

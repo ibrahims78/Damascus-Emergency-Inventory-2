@@ -94,7 +94,7 @@ function columnName(index: number) {
 async function printCurrentPage() {
   if (Capacitor.isNativePlatform()) {
     try {
-      await nativeFileActions.print({ title: 'تقرير منظومة الإسعاف والطوارئ' });
+      await nativeFileActions.print({ title: 'تقرير مستودعات مديرية صحة دمشق' });
       return;
     } catch (error) {
       console.error('Native print failed, falling back to browser print:', error);
@@ -156,8 +156,8 @@ async function exportXlsx(filename: string, headers: string[], rows: ExcelCell[]
     const wb = XLSX.utils.book_new();
     wb.Props = {
       Title: filename.replace(/\.xlsx$/i, ''),
-      Subject: 'تقرير منظومة مستودع الإسعاف والطوارئ — دمشق',
-      Author: 'منظومة مستودع الإسعاف والطوارئ',
+      Subject: 'تقرير مستودعات مديرية صحة دمشق',
+      Author: 'مستودعات مديرية صحة دمشق',
       CreatedDate: new Date(),
     };
     XLSX.utils.book_append_sheet(wb, ws, 'البيانات');
@@ -170,7 +170,7 @@ async function exportXlsx(filename: string, headers: string[], rows: ExcelCell[]
     );
     toast({
       description: location
-        ? `تم حفظ ملف Excel في مجلد Download/Damascus Emergency Inventory`
+        ? `تم حفظ ملف Excel في مجلد Download/مستودعات مديرية صحة دمشق`
         : `تم تنزيل ملف Excel (${rows.length.toLocaleString('ar')} سجل) بنجاح`,
     });
   } catch (error) {
@@ -239,11 +239,11 @@ function PrintHeader({ title }: { title: string }) {
     <div className="hidden print:block mb-6 text-center border-b-2 border-[#1e3a5f] pb-4">
       <img
         src={logoUrl}
-        alt="شعار منظومة الإحالة والإسعاف والطوارئ"
+        alt="شعار مستودعات مديرية صحة دمشق"
         className="mx-auto mb-2 h-20 w-20 object-contain"
       />
       <div className="text-xs text-muted-foreground">الجمهورية العربية السورية — وزارة الصحة</div>
-      <div className="text-lg font-bold text-[#1e3a5f]">منظومة الإحالة والإسعاف والطوارئ — دمشق</div>
+      <div className="text-lg font-bold text-[#1e3a5f]">مستودعات مديرية صحة دمشق</div>
       <div className="text-base font-semibold mt-1">{title}</div>
       <div className="text-xs text-muted-foreground mt-1">
         تاريخ الطباعة: {new Date().toLocaleDateString('ar-SY')}
@@ -1349,7 +1349,7 @@ export function ReportsPage() {
 
       {/* Print-only footer */}
       <div className="hidden print:block mt-8 pt-4 border-t text-xs text-muted-foreground text-center">
-        نظام مستودع منظومة الإسعاف والطوارئ — دمشق · طُبع بتاريخ {new Date().toLocaleDateString('ar-SY')}
+        مستودعات مديرية صحة دمشق · طُبع بتاريخ {new Date().toLocaleDateString('ar-SY')}
       </div>
     </div>
   );

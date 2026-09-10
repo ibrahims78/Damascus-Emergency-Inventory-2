@@ -69,6 +69,16 @@ const PREVIEW_KEY = 'pending-restore-preview';
 const OFFLINE_HEADER = 'X-Damascus-Offline';
 const INDEXED_DB_TIMEOUT_MS = 15_000;
 const OFFLINE_REQUEST_TIMEOUT_MS = 20_000;
+const DEFAULT_ORG_NAME = 'مستودعات مديرية صحة دمشق';
+
+function isLegacyOrgName(value: string): boolean {
+  const normalized = value.trim();
+  return (
+    normalized !== DEFAULT_ORG_NAME &&
+    /^(منظومة|نظام)\s/u.test(normalized) &&
+    /(الإحالة|الاحالة|الإسعاف والطوارئ|الاسعاف والطوارئ)/u.test(normalized)
+  );
+}
 
 let statePromise: Promise<OfflineState> | undefined;
 let writeQueue = Promise.resolve();
@@ -118,7 +128,7 @@ function initialState(): OfflineState {
       id: 1,
       setupCompleted: false,
       setupAt: null,
-      orgName: 'منظومة الإحالة والإسعاف والطوارئ — دمشق',
+      orgName: DEFAULT_ORG_NAME,
       orgSubtitle: null,
       expiryAlertDays: 30,
       unitsList: null,
@@ -222,10 +232,18 @@ async function loadState(): Promise<OfflineState> {
   }
   if (existing) {
     const fresh = initialState();
+    const existingSettings = existing.settings ?? fresh.settings;
     return {
       ...fresh,
       ...existing,
       version: 2,
+      settings: {
+        ...fresh.settings,
+        ...existingSettings,
+        orgName: isLegacyOrgName(existingSettings.orgName)
+          ? DEFAULT_ORG_NAME
+          : existingSettings.orgName,
+      },
       nodeIdentity: existing.nodeIdentity ?? fresh.nodeIdentity,
       entityIds: existing.entityIds ?? [],
       changeLog: existing.changeLog ?? [],

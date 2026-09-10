@@ -122,7 +122,7 @@ export function PrintTransactionPage() {
                   الجمهورية العربية السورية
                 </div>
                 <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '3px' }}>
-                  وزارة الصحة — منظومة الاحالة و الاسعاف و الطوارئ - دمشق
+                  وزارة الصحة — مستودعات مديرية صحة دمشق
                 </div>
                 <div style={{ fontSize: '16px', fontWeight: 800, color: '#1e3a5f' }}>
                   {organizationName}
@@ -138,7 +138,7 @@ export function PrintTransactionPage() {
               <div style={{ textAlign: 'center', flex: '0 0 auto' }}>
                 <img
                   src={logoUrl}
-                  alt="شعار منظومة الإحالة والإسعاف والطوارئ"
+                  alt="شعار مستودعات مديرية صحة دمشق"
                   style={{ width: '72px', height: '72px', objectFit: 'contain', borderRadius: '50%' }}
                 />
               </div>

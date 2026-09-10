@@ -151,7 +151,7 @@ export function CustodyDetailsPage({ custodyId: providedId }: { custodyId?: numb
           </div>
         </CardContent>
       </Card>
-      <div className="hidden print:block print:text-xs">تمت طباعة بطاقة العهدة من نظام إدارة مستودع الإسعاف والطوارئ — {new Date().toLocaleDateString('ar-SY')}</div>
+      <div className="hidden print:block print:text-xs">تمت طباعة بطاقة العهدة من مستودعات مديرية صحة دمشق — {new Date().toLocaleDateString('ar-SY')}</div>
     </div>
   );
 }

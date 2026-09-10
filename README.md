@@ -1,15 +1,15 @@
 <div align="center">
 
-# منظومة الاحالة و الاسعاف و الطوارئ - دمشق | نظام المستودع
+# مستودعات مديرية صحة دمشق
 
-### Damascus EMS Warehouse Management System — v4.0.2
+### Damascus Health Directorate Warehouses — v4.0.2
 
 [![Release](https://img.shields.io/github/v/release/ibrahims78/Damascus-Emergency-Inventory-2?label=%D8%A7%D9%84%D8%A5%D8%B5%D8%AF%D8%A7%D8%B1&logo=github)](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/releases/latest)
 [![CI](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/actions/workflows/ci.yml/badge.svg)](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/actions/workflows/ci.yml)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)](#-التنزيلات)
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 
-نظام إدارة مستودع داخلي لمنظومة الاحالة و الاسعاف و الطوارئ - دمشق — تتبع المواد الطبية والتجهيزات، سندات إدخال وإخراج A4 جاهزة للطباعة، لوحة تحكم بمؤشرات حقيقية، تقارير متقدمة، نسخ احتياطي مشفّر، مزامنة بين الأجهزة، وترخيص رقمي — **بواجهة عربية RTL كاملة ويعمل دون إنترنت**.
+نظام إدارة مستودعات داخلي لمديرية صحة دمشق — تتبع المواد الطبية والتجهيزات، سندات إدخال وإخراج A4 جاهزة للطباعة، لوحة تحكم بمؤشرات حقيقية، تقارير متقدمة، نسخ احتياطي مشفّر، مزامنة بين الأجهزة، وترخيص رقمي — **بواجهة عربية RTL كاملة ويعمل دون إنترنت**.
 
 </div>
 
@@ -24,7 +24,7 @@
 | `Windows-Protected.zip` | ويندوز 10/11 (64-bit) | النسخة الكاملة **مع تفعيل رقمي Ed25519** مربوط بالجهاز عبر الخادم |
 | `Android-Protected.apk` | أندرويد 7+ | النسخة المحمية للهاتف (تفعيل محلي بمعرّف الهاتف) |
 
-> الحزم لا تحتاج تثبيتاً: فك الضغط وشغّل `Damascus Emergency Inventory.exe`. لا تحتاج PostgreSQL ولا Node.js ولا اتصال إنترنت.
+> الحزم لا تحتاج تثبيتاً: فك الضغط وشغّل `مستودعات مديرية صحة دمشق.exe`. لا تحتاج PostgreSQL ولا Node.js ولا اتصال إنترنت.
 
 ---
 
@@ -50,7 +50,7 @@
 ## 🚀 البدء السريع (ويندوز)
 
 1. نزّل `Windows-Protected.zip` من صفحة الإصدارات
-2. فك الضغط وشغّل **`Damascus Emergency Inventory.exe`**
+2. فك الضغط وشغّل **`مستودعات مديرية صحة دمشق.exe`**
 3. عند أول تشغيل: أنشئ حساب المدير (شاشة «إعداد حساب المدير»)
 4. ستظهر شاشة **«نسخة محمية»** بمعرّف الجهاز — انسخه
 5. أرسل معرّف الجهاز إلى مسؤول النظام لإصدار الترخيص
@@ -175,13 +175,13 @@ node release-artifacts/v4.0.2/scripts/reassemble-electron.mjs  # إعادة تج
 
 | | |
 |---|---|
-| **المالك** | منظومة الاحالة و الاسعاف و الطوارئ - دمشق |
+| **المالك** | مديرية صحة دمشق |
 | **المصمم والمطوّر** | إبراهيم الصيداوي (ibrahims78) |
 | **موبايل** | 00963933706403 |
 ---
 
 ## 📄 الترخيص
 
-مشروع داخلي — منظومة الاحالة و الاسعاف و الطوارئ - دمشق. جميع الحقوق محفوظة (انظر [LICENSE](LICENSE)).
+مشروع داخلي — مستودعات مديرية صحة دمشق. جميع الحقوق محفوظة (انظر [LICENSE](LICENSE)).
 
 **المطوّر**: [ibrahims78](https://github.com/ibrahims78)

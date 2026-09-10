@@ -72,7 +72,7 @@ router.get("/export", requireAuth, requireRole("admin"), async (req, res) => {
 
     const backup = {
       version: "2.0",
-      system: "Damascus EMS Warehouse",
+      system: "مستودعات مديرية صحة دمشق",
       exportedAt: new Date().toISOString(),
       counts: {
         categories: categories.length,
