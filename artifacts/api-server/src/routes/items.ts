@@ -364,6 +364,7 @@ router.post(
         const decision = decisions[i];
         const rowNum = decision.row.rowNumber;
         const name = decision.row.name || `صف ${rowNum}`;
+        if (decision.state === "empty") continue;
         if (decision.warnings.length) {
           for (const warning of decision.warnings) {
             results.warnings.push({ row: rowNum, name, warning: warning.message });

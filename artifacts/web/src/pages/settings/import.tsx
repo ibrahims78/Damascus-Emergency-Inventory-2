@@ -1,5 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { useGetCurrentUser, getGetCurrentUserQueryKey } from '@workspace/api-client-react';
 import {
   Settings2,
@@ -50,6 +51,7 @@ import {
   INVENTORY_SHEET_NAMES,
   INVENTORY_TEMPLATE_COLUMNS,
   INVENTORY_TEMPLATE_VERSION,
+  DEFAULT_INVENTORY_UNITS,
   normalizeInventoryRow,
 } from '@workspace/api-zod';
 interface SystemSettings {
@@ -104,11 +106,6 @@ async function changePassword(data: {
   }
 }
 
-const DEFAULT_UNITS = [
-  'قطعة', 'علبة', 'لتر', 'مل', 'كيس', 'زجاجة', 'برميل',
-  'رول', 'كرتون', 'طرد', 'حبة', 'زوج', 'مجموعة', 'جرام', 'كيلوغرام',
-];
-
 const DEFAULT_TECHNICAL_CONDITIONS = [
   { key: 'good', label: 'جيد' },
   { key: 'needs_inspection', label: 'يحتاج فحص' },
@@ -146,6 +143,133 @@ export function ImportTab() {
 
   const categories = categoriesData ?? [];
 
+  const patchTemplateArchive = (workbookBytes: Uint8Array) => {
+    const archive = unzipSync(workbookBytes);
+    const textStyleId = 1;
+    const dateStyleId = 2;
+
+    const patchStyles = () => {
+      const path = 'xl/styles.xml';
+      const styles = archive[path] ? strFromU8(archive[path]) : '';
+      if (!styles || styles.includes('numFmtId="165"')) return;
+      const numFmts = styles.match(/<numFmts count="(\d+)">/);
+      const nextNumFmt = '<numFmt numFmtId="165" formatCode="yyyy-mm-dd"/>';
+      const withNumFmt = numFmts
+        ? styles.replace(
+            /(<numFmts count=")(\d+)(">)/,
+            (_, prefix: string, count: string, suffix: string) =>
+              `${prefix}${Number(count) + 1}${suffix}${nextNumFmt}`,
+          )
+        : styles.replace(
+            '<fonts ',
+            `<numFmts count="1">${nextNumFmt}</numFmts><fonts `,
+          );
+      const cellXfs = withNumFmt.match(/<cellXfs count="(\d+)">/);
+      if (!cellXfs) return;
+      const firstNewStyleId = Number(cellXfs[1]);
+      const styleXml = [
+        `<xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`,
+        `<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`,
+      ].join('');
+      archive[path] = strToU8(
+        withNumFmt
+          .replace(
+            /(<cellXfs count=")(\d+)(">)/,
+            (_, prefix: string, count: string, suffix: string) =>
+              `${prefix}${Number(count) + 2}${suffix}`,
+          )
+          .replace('</cellXfs>', `${styleXml}</cellXfs>`)
+          .replace(/__TEXT_STYLE__/g, String(firstNewStyleId))
+          .replace(/__DATE_STYLE__/g, String(firstNewStyleId + 1)),
+      );
+    };
+
+    const escapeXml = (value: string) =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+
+    const patchSheet = (
+      index: number,
+      columnStyles: number[],
+      validations: Array<{
+        sqref: string;
+        type: string;
+        operator?: string;
+        formula1: string;
+        formula2?: string;
+      }>,
+    ) => {
+      const path = `xl/worksheets/sheet${index}.xml`;
+      if (!archive[path]) return;
+      let xml = strFromU8(archive[path]);
+      xml = xml.replace(
+        /<sheetView workbookViewId="0"\/>/,
+        '<sheetView workbookViewId="0" rightToLeft="1"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView>',
+      );
+      xml = xml.replace(
+        /<col min="(\d+)" max="(\d+)"([^>]*)\/>/g,
+        (match, min: string, _max: string, attrs: string) => {
+          const style = columnStyles[Number(min) - 1];
+          return style
+            ? `<col min="${min}" max="${min}"${attrs.replace(/\sstyle="[^"]*"/, '')} style="${style}"/>`
+            : match;
+        },
+      );
+      if (validations.length && !xml.includes('<dataValidations')) {
+        const validationXml = validations
+          .map((validation) => {
+            const attributes = [
+              `type="${escapeXml(validation.type)}"`,
+              validation.operator ? `operator="${escapeXml(validation.operator)}"` : '',
+              `allowBlank="1"`,
+              `showInputMessage="1"`,
+              `showErrorMessage="1"`,
+              `sqref="${escapeXml(validation.sqref)}"`,
+            ].filter(Boolean).join(' ');
+            const formulas = [
+              `<formula1>${escapeXml(validation.formula1)}</formula1>`,
+              validation.formula2 ? `<formula2>${escapeXml(validation.formula2)}</formula2>` : '',
+            ].join('');
+            return `<dataValidation ${attributes}>${formulas}</dataValidation>`;
+          })
+          .join('');
+        const dataValidations = `<dataValidations count="${validations.length}">${validationXml}</dataValidations>`;
+        xml = xml.includes('<ignoredErrors')
+          ? xml.replace('<ignoredErrors', `${dataValidations}<ignoredErrors`)
+          : xml.replace('</worksheet>', `${dataValidations}</worksheet>`);
+      }
+      archive[path] = strToU8(xml);
+    };
+
+    patchStyles();
+    patchSheet(
+      1,
+      [textStyleId, textStyleId, textStyleId, textStyleId, 0, textStyleId, textStyleId],
+      [
+        { sqref: 'C2:C1000', type: 'list', formula1: `'${INVENTORY_SHEET_NAMES.referenceValues}'!$B$2:$B$100` },
+        { sqref: 'D2:D1000', type: 'list', formula1: `'${INVENTORY_SHEET_NAMES.referenceValues}'!$A$2:$A$100` },
+        { sqref: 'E2:E1000', type: 'whole', operator: 'greaterThanOrEqual', formula1: '0' },
+      ],
+    );
+    patchSheet(
+      2,
+      [textStyleId, 0, textStyleId, dateStyleId, textStyleId, textStyleId, dateStyleId],
+      [
+        { sqref: 'A2:A1000', type: 'textLength', operator: 'greaterThan', formula1: '0' },
+        { sqref: 'B2:B1000', type: 'whole', operator: 'greaterThanOrEqual', formula1: '0' },
+        { sqref: 'D2:D1000', type: 'date', operator: 'between', formula1: 'DATE(1900,1,1)', formula2: 'DATE(9999,12,31)' },
+        { sqref: 'G2:G1000', type: 'date', operator: 'between', formula1: 'DATE(1900,1,1)', formula2: 'DATE(9999,12,31)' },
+      ],
+    );
+    patchSheet(3, [textStyleId, textStyleId, textStyleId], []);
+    patchSheet(4, [textStyleId, textStyleId], []);
+    return zipSync(archive);
+  };
+
   const handleExportTemplate = async () => {
     const XLSX = await import('xlsx');
     const itemHeaders = INVENTORY_TEMPLATE_COLUMNS.items.map((column) => column.label);
@@ -156,13 +280,11 @@ export function ImportTab() {
       sheet['!cols'] = widths.map((wch) => ({ wch }));
       sheet['!freeze'] = { xSplit: 0, ySplit: 1 };
       sheet['!autofilter'] = { ref };
+      sheet['!rightToLeft'] = true;
     };
     applySheetDefaults(dataWs, [14, 30, 14, 22, 16, 20, 30], 'A1:G1000');
     applySheetDefaults(batchWs, [16, 18, 16, 18, 22, 20, 20], 'A1:G1000');
 
-    const catList = categories.length
-      ? categories.map((c) => c.name).join(' — ')
-      : 'أضف التصنيفات أولاً من تبويب التصنيفات';
     const instrRows = [
       [`نموذج استيراد المخزون — الإصدار ${INVENTORY_TEMPLATE_VERSION}`],
       [],
@@ -176,6 +298,8 @@ export function ImportTab() {
       ['التاريخ', 'استخدم YYYY-MM-DD. يقبل المستورد أيضًا تاريخ Excel الرقمي.'],
       ['الكمية', 'عدد صحيح غير سالب. لا تستخدم رصيد المادة الموجودة لتغيير مخزونها.'],
       ['التصنيف والوحدة', 'استخدم القيم الموجودة في ورقة القيم المرجعية عندما تكون متاحة.'],
+      ['الدفعات', 'استخدم ورقة الأرصدة والدفعات الافتتاحية لإضافة أكثر من دفعة للمادة نفسها.'],
+      ['الرصيد الموجود', 'لا تغيّر رصيد مادة موجودة من ورقة المواد؛ استخدم حركة إدخال أو تسوية.'],
       ['التوافق', 'لا تغيّر أسماء الأوراق أو أسماء الرؤوس. تُقبل المرادفات العربية والقديمة عند الرفع.'],
       [],
       ['مثال تعبئة — للتوضيح فقط، وليس في ورقة البيانات'],
@@ -188,27 +312,38 @@ export function ImportTab() {
 
     const referenceValues = [
       ['التصنيفات', 'الوحدات'],
-      ...Array.from({ length: Math.max(categories.length, DEFAULT_UNITS.length) }, (_, index) => [
+      ...Array.from({ length: Math.max(categories.length, DEFAULT_INVENTORY_UNITS.length) }, (_, index) => [
         categories[index]?.name ?? '',
-        DEFAULT_UNITS[index] ?? '',
+        DEFAULT_INVENTORY_UNITS[index] ?? '',
       ]),
     ];
     const referenceWs = XLSX.utils.aoa_to_sheet(referenceValues);
     applySheetDefaults(referenceWs, [30, 20], 'A1:B100');
     (dataWs as Record<string, unknown>)['!dataValidation'] = [
       { sqref: 'D2:D1000', type: 'list', formula1: `'${INVENTORY_SHEET_NAMES.referenceValues}'!$A$2:$A$100` },
+      { sqref: 'C2:C1000', type: 'list', formula1: `'${INVENTORY_SHEET_NAMES.referenceValues}'!$B$2:$B$100` },
       { sqref: 'E2:E1000', type: 'whole', operator: 'greaterThanOrEqual', formula1: '0' },
     ];
     (batchWs as Record<string, unknown>)['!dataValidation'] = [
+      { sqref: 'A2:A1000', type: 'textLength', operator: 'greaterThan', formula1: '0' },
       { sqref: 'B2:B1000', type: 'whole', operator: 'greaterThanOrEqual', formula1: '0' },
+      { sqref: 'D2:D1000', type: 'date', operator: 'between', formula1: 'DATE(1900,1,1)', formula2: 'DATE(9999,12,31)' },
+      { sqref: 'G2:G1000', type: 'date', operator: 'between', formula1: 'DATE(1900,1,1)', formula2: 'DATE(9999,12,31)' },
     ];
 
     const wb = XLSX.utils.book_new();
+    wb.Props = {
+      Title: `نموذج استيراد المخزون ${INVENTORY_TEMPLATE_VERSION}`,
+      Subject: 'المواد والأرصدة والدفعات الافتتاحية',
+      Comments: `إصدار النموذج: ${INVENTORY_TEMPLATE_VERSION}`,
+    };
     XLSX.utils.book_append_sheet(wb, dataWs, INVENTORY_SHEET_NAMES.items);
     XLSX.utils.book_append_sheet(wb, batchWs, INVENTORY_SHEET_NAMES.openingBatches);
     XLSX.utils.book_append_sheet(wb, instrWs, INVENTORY_SHEET_NAMES.instructions);
     XLSX.utils.book_append_sheet(wb, referenceWs, INVENTORY_SHEET_NAMES.referenceValues);
-    const workbookBytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const workbookBytes = patchTemplateArchive(
+      new Uint8Array(XLSX.write(wb, { bookType: 'xlsx', type: 'array' })),
+    );
     await downloadFile(
       new Blob([workbookBytes], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -231,7 +366,7 @@ export function ImportTab() {
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false });
 
-      // Prefer "البيانات" sheet, otherwise first sheet
+      // Prefer the standardized materials sheet; legacy "البيانات" remains supported.
       const sheetName = wb.SheetNames.includes(INVENTORY_SHEET_NAMES.items)
         ? INVENTORY_SHEET_NAMES.items
         : wb.SheetNames.includes('البيانات')
@@ -241,7 +376,7 @@ export function ImportTab() {
       const data = XLSX.utils.sheet_to_json<ImportRow>(ws, { defval: '' });
 
       if (data.length === 0) {
-        setParseError('لم يتم العثور على بيانات في الملف — تأكد من تعبئة ورقة "البيانات"');
+        setParseError(`لم يتم العثور على بيانات — املأ ورقة "${INVENTORY_SHEET_NAMES.items}" ثم أعد الرفع`);
         return;
       }
       setRows(data);

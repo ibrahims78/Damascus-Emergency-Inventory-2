@@ -1077,6 +1077,7 @@ async function route(pathname: string, searchParams: URLSearchParams, method: st
       for (const decision of decisions) {
         const row = decision.row;
         const name = row.name || `صف ${row.rowNumber}`;
+        if (decision.state === 'empty') continue;
         for (const warning of decision.warnings) {
           warnings.push({ row: row.rowNumber, name, warning: warning.message });
         }
