@@ -56,7 +56,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDateTime, formatDate } from '@/lib/utils';
 import { isValidIsoDate } from '@/lib/inventory-validation';
 import { toast } from '@/hooks/use-toast';
-import logoUrl from '@assets/logo.jpeg';
+import logoUrl from '@assets/damascus-health-directorate-logo.png';
 import { Capacitor } from '@capacitor/core';
 import { nativeFileActions } from '@/lib/native-file-actions';
 

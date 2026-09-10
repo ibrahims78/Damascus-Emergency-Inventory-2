@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { AlertCircle, ArrowRight, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLocation } from 'wouter';
-import logoUrl from '@assets/logo.jpeg';
+import logoUrl from '@assets/damascus-health-directorate-mark.png';
 
 export default function NotFound() {
   const [, setLocation] = useLocation();

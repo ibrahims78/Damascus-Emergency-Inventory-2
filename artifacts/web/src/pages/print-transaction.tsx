@@ -3,7 +3,7 @@ import { useGetTransactionPrint } from '@workspace/api-client-react';
 import { Printer, ArrowRight, FileDown, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDateTime } from '@/lib/utils';
-import logoUrl from '@assets/logo.jpeg';
+import logoUrl from '@assets/damascus-health-directorate-logo.png';
 import { Capacitor } from '@capacitor/core';
 import { nativeFileActions } from '@/lib/native-file-actions';
 

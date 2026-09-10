@@ -2,7 +2,7 @@
 
 # منظومة الاحالة و الاسعاف و الطوارئ - دمشق | نظام المستودع
 
-### Damascus EMS Warehouse Management System — v4.0.1
+### Damascus EMS Warehouse Management System — v4.0.2
 
 [![Release](https://img.shields.io/github/v/release/ibrahims78/Damascus-Emergency-Inventory-2?label=%D8%A7%D9%84%D8%A5%D8%B5%D8%AF%D8%A7%D8%B1&logo=github)](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/releases/latest)
 [![CI](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/actions/workflows/ci.yml/badge.svg)](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/actions/workflows/ci.yml)
@@ -17,7 +17,7 @@
 
 ## 📥 التنزيلات
 
-كل الإصدارات الجاهزة من صفحة [**Releases → Packages v4.0.1**](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/releases/tag/v4.0.1):
+كل الإصدارات الجاهزة من صفحة [**Releases → Packages v4.0.2**](https://github.com/ibrahims78/Damascus-Emergency-Inventory-2/releases/tag/v4.0.2):
 
 | الحزمة | المنصة | الوصف |
 |---|---|---|
@@ -129,7 +129,7 @@ Recharts            Capacitor (أندرويد)
 │   ├── backup-format/      # صيغة حزم النسخ والمزامنة المشفرة
 │   └── api-spec/           # مواصفة OpenAPI (مصدر الحقيقة)
 ├── android/                # مشروع أندرويد
-├── release-artifacts/v4.0.1/        # سكربتات التجميع والتوقيع ومفاتيح التحقق العامة
+├── release-artifacts/v4.0.2/        # سكربتات التجميع والتوقيع ومفاتيح التحقق العامة
 ├── docs/                   # أدلة التشغيل والمستخدم وقواعد المجال
 └── scripts/                # أدوات الاستيراد وإصدار التراخيص + CI
 ```
@@ -150,9 +150,9 @@ pnpm run build                  # بناء كامل
 # بناء حزم الإصدار
 node scripts/build-protected-web.mjs windows          # واجهة النسخة المحمية
 pnpm --filter @workspace/api-server run build:protected
-node release-artifacts/v4.0.1/scripts/reassemble-electron.mjs  # إعادة تجميع Windows من Linux
-./release-artifacts/v4.0.1/scripts/reassemble-electron.ps1    # إعادة التجميع على Windows
-./release-artifacts/v4.0.1/android/build-android-apk.ps1      # حزمتا أندرويد (يتطلب Android SDK)
+node release-artifacts/v4.0.2/scripts/reassemble-electron.mjs  # إعادة تجميع Windows من Linux
+./release-artifacts/v4.0.2/scripts/reassemble-electron.ps1    # إعادة التجميع على Windows
+./release-artifacts/v4.0.2/android/build-android-apk.ps1      # حزمتا أندرويد (يتطلب Android SDK)
 ```
 
 اختبارات CI تعمل تلقائياً عبر `.github/workflows/ci.yml` (مزامنة + أمان + قواعد بيانات على مثيلين حيين).
@@ -166,7 +166,7 @@ node release-artifacts/v4.0.1/scripts/reassemble-electron.mjs  # إعادة تج
 | لا يفتح من متصفح جهاز آخر | جدار الحماية (القاعدتان أعلاه) + `ipconfig` للعنوان الصحيح |
 | `Cannot GET /` على المنفذ 41789 | طبيعي — 41789 هو API فقط؛ الواجهة على **41790** |
 | «الترخيص غير مقبول» | تأكد أن مولّد التفعيل بنفس المنصة وأن المعرّف منسوخ كاملاً |
-| فشلت الاستعادة | حدّث النسخة إلى v4.0.1 (يتضمن إصلاحات مخطط الاستعادة) وشغّل مرة واحدة قبل الاستعادة |
+| فشلت الاستعادة | حدّث النسخة إلى v4.0.2 (يتضمن تحديث الهوية البصرية وتحسينات الإصدار) وشغّل مرة واحدة قبل الاستعادة |
 | المنفذ 41789/41790 مشغول | أغلق النسخ المكررة من التطبيق — يعود للمنفذ الثابت |
 
 ---

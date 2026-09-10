@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect, useRef, useState } from 'react';
-import logoUrl from '@assets/logo.jpeg';
+import logoUrl from '@assets/damascus-health-directorate-mark.png';
 import { useSidebar } from './sidebar-context';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -33,7 +33,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? "v4.0.1";
+const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? "v4.0.2";
 const DESIGNER_NAME = 'إبراهيم الصيداوي';
 const DESIGNER_PHONE = '0933706403';
 
