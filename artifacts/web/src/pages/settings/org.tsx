@@ -151,10 +151,10 @@ export function OrgTab() {
 
   return (
     <div className="bg-card border rounded-lg p-6 space-y-5">
-      <h2 className="font-semibold text-lg">إعدادات المنظومة</h2>
+      <h2 className="font-semibold text-lg">إعدادات المستودع</h2>
 
       <div className="space-y-1.5">
-        <Label htmlFor="orgName">اسم المنظومة <span className="text-destructive">*</span></Label>
+        <Label htmlFor="orgName">اسم المستودع <span className="text-destructive">*</span></Label>
         <Input id="orgName" value={orgName} onChange={(e) => setOrgName(e.target.value)}
         placeholder="مستودعات مديرية صحة دمشق" />
         <p className="text-xs text-muted-foreground">يظهر في رأس سندات الإدخال والإخراج</p>

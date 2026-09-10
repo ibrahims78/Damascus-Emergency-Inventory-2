@@ -83,14 +83,14 @@ function validateSystemSettingsInput(input: {
 
   if (input.orgName !== undefined) {
     if (typeof input.orgName !== "string") {
-      return { error: "اسم المنظومة يجب أن يكون نصاً" };
+      return { error: "اسم المستودع يجب أن يكون نصاً" };
     }
     const orgName = input.orgName.trim();
     if (orgName.length < 2) {
-      return { error: "اسم المنظومة مطلوب ولا يمكن أن يكون فارغاً" };
+      return { error: "اسم المستودع مطلوب ولا يمكن أن يكون فارغاً" };
     }
     if (orgName.length > 200) {
-      return { error: "اسم المنظومة طويل جداً" };
+      return { error: "اسم المستودع طويل جداً" };
     }
     normalized.orgName = orgName;
   }

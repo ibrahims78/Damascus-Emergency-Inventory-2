@@ -384,8 +384,8 @@ export function HelpPage() {
       <section id="overview" className="scroll-mt-6">
         <SectionHeading
           eyebrow="01 / التعريف"
-          title="ما هي المنظومة؟"
-          description="منظومة تشغيلية لإدارة دورة حياة المخزون من الاستلام وحتى الصرف أو الإرجاع أو الإتلاف، مع فصل واضح بين المواد الاستهلاكية والتجهيزات الطبية."
+          title="ما هو المستودع؟"
+          description="مستودع تشغيلي لإدارة دورة حياة المخزون من الاستلام وحتى الصرف أو الإرجاع أو الإتلاف، مع فصل واضح بين المواد الاستهلاكية والتجهيزات الطبية."
           icon={BookOpen}
         />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -104,7 +104,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'منظومة الاحالة و الاسعاف و الطوارئ - دمشق'"
+          "default": "'مستودع الإحالة والإسعاف والطوارئ - دمشق'"
         },
         "org_subtitle": {
           "name": "org_subtitle",

@@ -295,7 +295,7 @@ export function Header() {
     queryKey: ['settings'],
     queryFn: async () => {
       const response = await fetch('/api/settings', { credentials: 'include' });
-      if (!response.ok) throw new Error('فشل جلب إعدادات المنظومة');
+      if (!response.ok) throw new Error('فشل جلب إعدادات المستودع');
       return response.json() as Promise<{ orgName: string; orgSubtitle?: string | null }>;
     },
     refetchOnWindowFocus: true,

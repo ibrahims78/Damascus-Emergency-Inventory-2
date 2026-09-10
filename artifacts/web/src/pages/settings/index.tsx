@@ -43,7 +43,7 @@ export function SettingsPage() {
     {
       label: 'المؤسسة والمخزون',
       tabs: [
-        ['org', 'إعدادات المنظومة', Building2],
+        ['org', 'إعدادات المستودع', Building2],
         ['units', 'وحدات القياس', Ruler],
         ['technical-conditions', 'الحالات الفنية', Wrench],
       ] as const,
@@ -101,7 +101,7 @@ export function SettingsPage() {
     profile: 'الملف الشخصي',
     password: 'كلمة المرور',
     activity: 'سجل نشاطي',
-    org: 'إعدادات المنظومة',
+    org: 'إعدادات المستودع',
     units: 'وحدات القياس',
     'technical-conditions': 'الحالات الفنية',
     categories: 'التصنيفات',
