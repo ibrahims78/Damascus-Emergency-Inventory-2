@@ -30,7 +30,7 @@ const schema = z.object({
   documentDate: z.string()
     .min(1, 'تاريخ الجرد مطلوب')
     .refine(isValidIsoDate, 'تاريخ الجرد غير صالح'),
-  reason: z.string().min(5, 'سبب التسوية مطلوب (5 أحرف على الأقل)'),
+  reason: z.string().min(5, 'رقم المحضر مطلوب (5 أحرف على الأقل)'),
   notes: z.string().optional().nullable(),
 });
 
@@ -203,7 +203,7 @@ export function AdjustmentForm({
           <div>
             <h1 className="text-xl font-bold tracking-tight">تسوية جرد</h1>
             <p className="text-sm text-muted-foreground">
-              تصحيح رصيد مادة أو تجهيز مع توثيق السبب كسند حركة قابل للطباعة
+              تصحيح رصيد مادة أو تجهيز مع توثيق رقم المحضر كسند حركة قابل للطباعة
             </p>
           </div>
         </div>
@@ -457,11 +457,11 @@ export function AdjustmentForm({
               name="reason"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>سبب التسوية *</FormLabel>
+                  <FormLabel>رقم المحضر *</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
-                      placeholder="مثال: جرد فعلي، تلف، خطأ في الإدخال السابق..."
+                       placeholder="مثال: محضر جرد رقم 123..."
                       onChange={(e) => { field.onChange(e); setConfirmed(false); }}
                     />
                   </FormControl>

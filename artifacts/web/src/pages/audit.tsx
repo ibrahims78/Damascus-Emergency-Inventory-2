@@ -171,7 +171,7 @@ const DETAIL_LABELS: Record<string, string> = {
   nodeId: 'معرّف العقدة',
   bytes: 'الحجم',
   message: 'الرسالة',
-  reason: 'السبب',
+  reason: 'رقم المحضر',
   quantity: 'الكمية',
   unit: 'الوحدة',
 };

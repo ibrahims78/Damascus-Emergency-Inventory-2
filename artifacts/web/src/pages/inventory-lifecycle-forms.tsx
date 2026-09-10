@@ -649,9 +649,9 @@ function MovementEntityForm({
           {kind === 'central-return' && (
             <Field label="حالة المرتجع" required><Select value={condition} onValueChange={(value) => { setCondition(value); setConfirming(false); setValidationError(''); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{returnConditions.map((item) => <SelectItem key={item.key} value={item.key}>{item.label}</SelectItem>)}</SelectContent></Select></Field>
           )}
-          <Field label="السبب" required><Input value={reason} onChange={(e) => { setReason(e.target.value); setConfirming(false); setValidationError(''); }} placeholder="اكتب السبب بالتفصيل" /></Field>
+           <Field label="رقم المحضر" required><Input value={reason} onChange={(e) => { setReason(e.target.value); setConfirming(false); setValidationError(''); }} placeholder="أدخل رقم المحضر" /></Field>
         </div>
-          <Field label="ملاحظات / رقم المحضر"><Textarea value={notes} onChange={(e) => { setNotes(e.target.value); setConfirming(false); setValidationError(''); }} className="min-h-24" /></Field>
+           <Field label="ملاحظات"><Textarea value={notes} onChange={(e) => { setNotes(e.target.value); setConfirming(false); setValidationError(''); }} className="min-h-24" /></Field>
       </FormCard>
     </PageFrame>
   );

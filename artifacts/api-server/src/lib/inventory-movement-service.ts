@@ -980,10 +980,10 @@ async function createAdjustment(
   }
   const rawReason = String(input.reason ?? "").trim();
   if (!rawReason) {
-    throw new InventoryMovementError("REQUIRED_FIELD", "سبب التسوية مطلوب");
+    throw new InventoryMovementError("REQUIRED_FIELD", "رقم المحضر مطلوب");
   }
   if (rawReason.length < 5) {
-    throw new InventoryMovementError("REASON_TOO_SHORT", "سبب التسوية قصير جدًا (5 أحرف على الأقل)");
+    throw new InventoryMovementError("REASON_TOO_SHORT", "رقم المحضر قصير جدًا (5 أحرف على الأقل)");
   }
   // Mandatory voucher date for adjustments (approved plan §3.8).
   // The shared helper throws INVALID_DATE; the approved contract for the
@@ -1029,7 +1029,7 @@ async function createAdjustment(
         itemId,
         reason: rawReason,
         notes: [
-          `تسوية جرد — السبب: ${rawReason}`,
+          `تسوية جرد — رقم المحضر: ${rawReason}`,
           `الكمية قبل: ${item.current_stock}، الكمية بعد: ${newStock}، الفرق: ${delta >= 0 ? "+" : ""}${delta}`,
           textOrNull(input.notes),
         ]
@@ -1100,7 +1100,7 @@ async function createAdjustment(
       equipmentId: equipment.id,
       reason: rawReason,
       notes: [
-        `تسوية جرد — السبب: ${rawReason}`,
+          `تسوية جرد — رقم المحضر: ${rawReason}`,
         `الكمية قبل: ${equipment.quantity}، الكمية بعد: ${newStock}، الفرق: ${delta >= 0 ? "+" : ""}${delta}`,
         `العهد المفتوحة: ${openCustody}`,
         textOrNull(input.notes),

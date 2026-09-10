@@ -53,7 +53,6 @@ import { downloadFile } from '@/lib/file-download';
 interface SystemSettings {
   id: number;
   orgName: string;
-  orgSubtitle?: string | null;
   expiryAlertDays: number;
   unitsList?: string | null;
   technicalConditions?: string | null;
@@ -71,7 +70,7 @@ async function fetchSettings(): Promise<SystemSettings> {
 }
 
 async function saveSettings(
-  data: Partial<Pick<SystemSettings, 'orgName' | 'orgSubtitle' | 'expiryAlertDays' | 'unitsList' | 'technicalConditions' | 'returnConditions'>>,
+  data: Partial<Pick<SystemSettings, 'orgName' | 'expiryAlertDays' | 'unitsList' | 'technicalConditions' | 'returnConditions'>>,
 ): Promise<SystemSettings> {
   const res = await fetch('/api/settings', {
     method: 'PUT',
@@ -129,13 +128,11 @@ export function OrgTab() {
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: fetchSettings });
 
   const [orgName, setOrgName]         = useState('');
-  const [orgSubtitle, setOrgSubtitle] = useState('');
   const [expiryAlertDays, setDays]    = useState('30');
 
   useEffect(() => {
     if (settings) {
       setOrgName(settings.orgName);
-      setOrgSubtitle(settings.orgSubtitle ?? '');
       setDays(String(settings.expiryAlertDays));
     }
   }, [settings]);
@@ -158,12 +155,6 @@ export function OrgTab() {
         <Input id="orgName" value={orgName} onChange={(e) => setOrgName(e.target.value)}
         placeholder="مستودعات مديرية صحة دمشق" />
         <p className="text-xs text-muted-foreground">يظهر في رأس سندات الإدخال والإخراج</p>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="orgSubtitle">العنوان الفرعي (اختياري)</Label>
-        <Input id="orgSubtitle" value={orgSubtitle} onChange={(e) => setOrgSubtitle(e.target.value)}
-          placeholder="مثال: مستودع مواد الإسعاف" />
       </div>
 
       <div className="space-y-1.5">
@@ -235,7 +226,7 @@ export function OrgTab() {
       </section>
 
       <div className="flex justify-end pt-2">
-        <Button onClick={() => mutation.mutate({ orgName, orgSubtitle, expiryAlertDays: Number(expiryAlertDays) })}
+        <Button onClick={() => mutation.mutate({ orgName, expiryAlertDays: Number(expiryAlertDays) })}
           disabled={mutation.isPending} className="gap-2">
           <Save className="h-4 w-4" />
           {mutation.isPending ? 'جاري الحفظ...' : 'حفظ الإعدادات'}

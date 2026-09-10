@@ -296,7 +296,7 @@ export function Header() {
     queryFn: async () => {
       const response = await fetch('/api/settings', { credentials: 'include' });
       if (!response.ok) throw new Error('فشل جلب إعدادات المستودع');
-      return response.json() as Promise<{ orgName: string; orgSubtitle?: string | null }>;
+      return response.json() as Promise<{ orgName: string }>;
     },
     refetchOnWindowFocus: true,
   });
@@ -373,11 +373,6 @@ export function Header() {
         <p className="truncate text-sm font-semibold text-foreground">
           {systemSettings?.orgName ?? 'مستودعات مديرية صحة دمشق'}
         </p>
-        {systemSettings?.orgSubtitle && (
-          <p className="truncate text-[11px] text-muted-foreground mt-0.5">
-            {systemSettings.orgSubtitle}
-          </p>
-        )}
       </div>
 
       <div className="flex items-center gap-3">

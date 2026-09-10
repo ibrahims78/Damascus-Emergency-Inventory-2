@@ -30,7 +30,7 @@ export function validateExceptionMovement({
     return 'التاريخ غير صالح';
   }
   if (reason.trim().length < 5) {
-    return 'السبب مطلوب ويجب أن يكون واضحًا (5 أحرف على الأقل)';
+    return 'رقم المحضر مطلوب ويجب أن يكون واضحًا (5 أحرف على الأقل)';
   }
   return null;
 }
