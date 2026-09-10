@@ -52,7 +52,6 @@ import {
   INVENTORY_TEMPLATE_COLUMNS,
   INVENTORY_TEMPLATE_VERSION,
   DEFAULT_INVENTORY_UNITS,
-  normalizeInventoryRow,
 } from '@workspace/api-zod';
 interface SystemSettings {
   id: number;
@@ -125,8 +124,12 @@ const DEFAULT_RETURN_CONDITIONS = [
 
 export function ImportTab() {
   const [rows, setRows] = useState<ImportRow[]>([]);
+  const [openingBatchRows, setOpeningBatchRows] = useState<ImportRow[]>([]);
+  const [importPayload, setImportPayload] = useState<ImportPayload>({ items: [], openingBatches: [] });
   const [fileName, setFileName] = useState('');
   const [importing, setImporting] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [parseError, setParseError] = useState('');
   const [importMode, setImportMode] = useState<'insert' | 'upsert'>('insert');
@@ -142,6 +145,31 @@ export function ImportTab() {
   });
 
   const categories = categoriesData ?? [];
+
+  const runPreview = async (payload: ImportPayload, mode: 'insert' | 'upsert') => {
+    setPreviewing(true);
+    try {
+      const res = await fetch(`/api/items/bulk-import/preview?mode=${mode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json()) as ImportPreview & { error?: string };
+      if (!res.ok && !data.summary) throw new Error(data.error || 'تعذر فحص الملف');
+      setPreview(data);
+      if (!data.valid && data.summary?.errorRows) {
+        setParseError(`يوجد ${data.summary.errorRows} صف يحتاج إلى تصحيح قبل التنفيذ`);
+      } else {
+        setParseError('');
+      }
+    } catch (error) {
+      setPreview(null);
+      setParseError(error instanceof Error ? error.message : 'تعذر فحص الملف');
+    } finally {
+      setPreviewing(false);
+    }
+  };
 
   const patchTemplateArchive = (workbookBytes: Uint8Array) => {
     const archive = unzipSync(workbookBytes);
@@ -353,15 +381,61 @@ export function ImportTab() {
     toast.success('تم تحميل النموذج بنجاح');
   };
 
+  const handleExportInventory = async () => {
+    try {
+      const res = await fetch('/api/items/export', { credentials: 'include' });
+      const data = (await res.json()) as {
+        version: string;
+        items: Record<string, unknown>[];
+        openingBatches: Record<string, unknown>[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || 'تعذر تصدير المخزون');
+      const XLSX = await import('xlsx');
+      const itemHeaders = INVENTORY_TEMPLATE_COLUMNS.items.map((column) => column.label);
+      const batchHeaders = INVENTORY_TEMPLATE_COLUMNS.openingBatches.map((column) => column.label);
+      const itemRows = data.items.map((row) =>
+        INVENTORY_TEMPLATE_COLUMNS.items.map((column) => row[column.key] ?? ''),
+      );
+      const batchRows = data.openingBatches.map((row) =>
+        INVENTORY_TEMPLATE_COLUMNS.openingBatches.map((column) => row[column.key] ?? ''),
+      );
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.aoa_to_sheet([itemHeaders, ...itemRows]),
+        INVENTORY_SHEET_NAMES.items,
+      );
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.aoa_to_sheet([batchHeaders, ...batchRows]),
+        INVENTORY_SHEET_NAMES.openingBatches,
+      );
+      const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      await downloadFile(
+        new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+        `تصدير_المخزون_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
+      toast.success(`تم تصدير ${data.items.length} مادة و${data.openingBatches.length} دفعة`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'تعذر تصدير المخزون');
+    }
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setParseError('');
     setResult(null);
+    setPreview(null);
     setFileName(file.name);
     setRows([]);
+    setOpeningBatchRows([]);
 
     try {
+      if (file.size > 10 * 1024 * 1024) {
+        throw new Error('حجم الملف يتجاوز الحد المسموح به (10 ميغابايت)');
+      }
       const XLSX = await import('xlsx');
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false });
@@ -373,15 +447,25 @@ export function ImportTab() {
           ? 'البيانات'
         : wb.SheetNames[0];
       const ws = wb.Sheets[sheetName];
-      const data = XLSX.utils.sheet_to_json<ImportRow>(ws, { defval: '' });
+      const data = ws ? XLSX.utils.sheet_to_json<ImportRow>(ws, { defval: '' }) : [];
+      const batchSheet = wb.SheetNames.includes(INVENTORY_SHEET_NAMES.openingBatches)
+        ? wb.Sheets[INVENTORY_SHEET_NAMES.openingBatches]
+        : undefined;
+      const batches = batchSheet
+        ? XLSX.utils.sheet_to_json<ImportRow>(batchSheet, { defval: '' })
+        : [];
 
-      if (data.length === 0) {
+      if (data.length === 0 && batches.length === 0) {
         setParseError(`لم يتم العثور على بيانات — املأ ورقة "${INVENTORY_SHEET_NAMES.items}" ثم أعد الرفع`);
         return;
       }
       setRows(data);
+      setOpeningBatchRows(batches);
+      const payload = { items: data, openingBatches: batches };
+      setImportPayload(payload);
+      await runPreview(payload, importMode);
     } catch {
-      setParseError('فشل قراءة الملف — تأكد أنه ملف Excel صالح (.xlsx أو .xls)');
+      setParseError('فشل قراءة الملف أو تجاوزه الحدود — تأكد أنه ملف Excel صالح (.xlsx أو .xls)');
     }
     e.target.value = '';
   };
@@ -392,35 +476,24 @@ export function ImportTab() {
     String(r['الوحدة *'] ?? r['الوحدة'] ?? '').trim();
 
   const handleImport = async () => {
-    if (rows.length === 0) return;
+    if (importPayload.items.length === 0 && importPayload.openingBatches.length === 0) return;
+    if (!preview?.valid) {
+      toast.error('صحح أخطاء المعاينة قبل التنفيذ');
+      return;
+    }
     setImporting(true);
     setResult(null);
-
-    const payload = rows.map((r, index) => {
-      const normalized = normalizeInventoryRow(r, index + 2);
-      return {
-        code: normalized.code,
-        name: normalized.name,
-        unit: normalized.unit,
-        categoryName: normalized.categoryName,
-        currentStock: normalized.currentStock,
-        minStock: normalized.minStock,
-        expiryDate: normalized.expiryDate,
-        batchNumber: normalized.batchNumber,
-        location: normalized.location,
-        supplier: normalized.supplier,
-        notes: normalized.notes,
-      };
-    });
 
     try {
       const res = await fetch(`/api/items/bulk-import?mode=${importMode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(importPayload),
       });
-      const data = (await res.json()) as ImportResult;
+      const data = (await res.json()) as ImportResult & ImportPreview;
+      if (data.summary) setPreview(data);
+      if (!res.ok) throw new Error(data.error || 'تعذر تنفيذ الاستيراد');
       setResult(data);
       const total = data.created + (data.updated ?? 0);
       if (total > 0) {
@@ -430,12 +503,15 @@ export function ImportTab() {
         toast.success(`تم ${parts.join(' و')} مادة بنجاح`);
         void queryClient.invalidateQueries({ queryKey: ['items'] });
         setRows([]);
+        setOpeningBatchRows([]);
+        setImportPayload({ items: [], openingBatches: [] });
+        setPreview(null);
         setFileName('');
       } else {
         toast.error('لم يتم استيراد أي مادة — راجع الأخطاء أدناه');
       }
-    } catch {
-      toast.error('حدث خطأ أثناء الاستيراد');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'حدث خطأ أثناء الاستيراد');
     } finally {
       setImporting(false);
     }
@@ -448,6 +524,7 @@ export function ImportTab() {
     { label: 'الكمية', get: (r) => String(r['الكمية الحالية'] ?? 0) },
     { label: 'الحد الأدنى', get: (r) => String(r['الحد الأدنى'] ?? 0) },
   ];
+  const totalPayloadRows = importPayload.items.length + importPayload.openingBatches.length;
 
   return (
     <div className="space-y-5">
@@ -471,6 +548,10 @@ export function ImportTab() {
         <Button variant="outline" size="sm" className="gap-2" onClick={() => void handleExportTemplate()}>
           <Download className="h-4 w-4" />
           تحميل نموذج Excel
+        </Button>
+        <Button variant="outline" size="sm" className="gap-2" onClick={() => void handleExportInventory()}>
+          <ArrowDownToLine className="h-4 w-4" />
+          تصدير المخزون لإعادة الاستيراد
         </Button>
       </div>
 
@@ -496,27 +577,40 @@ export function ImportTab() {
           />
         </label>
         {parseError && <p className="text-sm text-destructive">{parseError}</p>}
-        {rows.length > 0 && (
+        {totalPayloadRows > 0 && (
           <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1.5">
             <CheckCircle2 className="h-4 w-4" />
-            تم قراءة <strong>{rows.length}</strong> صف من الملف
+            تم قراءة <strong>{totalPayloadRows}</strong> صف
+            {openingBatchRows.length > 0 && ` (${rows.length} مواد و${openingBatchRows.length} دفعات)`}
           </p>
         )}
       </div>
 
       {/* Preview table */}
-      {rows.length > 0 && (
+      {preview && (
         <div className="rounded-lg border overflow-hidden">
-          <div className="px-3 py-2 border-b bg-muted/30 flex items-center justify-between">
-            <span className="text-sm font-medium">معاينة البيانات</span>
-            <span className="text-xs text-muted-foreground">
-              {rows.length > 5 ? `أول 5 صفوف من ${rows.length}` : `${rows.length} صف`}
-            </span>
+          <div className="px-3 py-3 border-b bg-muted/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">فحص ومعاينة كامل الملف</span>
+              <Badge variant={preview.valid ? 'secondary' : 'destructive'}>
+                {preview.valid ? 'جاهز للتنفيذ' : 'يحتاج تصحيح'}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-6">
+              <span>الصفوف: <strong>{preview.summary.totalRows}</strong></span>
+              <span className="text-green-700">صالحة: <strong>{preview.summary.validRows}</strong></span>
+              <span className="text-amber-700">تحذيرات: <strong>{preview.summary.warningRows}</strong></span>
+              <span className="text-destructive">أخطاء: <strong>{preview.summary.errorRows}</strong></span>
+              <span>مواد جديدة: <strong>{preview.summary.newItems}</strong></span>
+              <span>دفعات: <strong>{preview.summary.openingBatches}</strong></span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b bg-muted/20">
+                  <th className="px-3 py-2 text-right font-medium text-muted-foreground">الصف</th>
+                  <th className="px-3 py-2 text-right font-medium text-muted-foreground">الحالة</th>
                   {previewCols.map((c) => (
                     <th key={c.label} className="px-3 py-2 text-right font-medium text-muted-foreground">
                       {c.label}
@@ -525,11 +619,30 @@ export function ImportTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 5).map((r, i) => (
-                  <tr key={i} className="border-b last:border-0 hover:bg-muted/10">
+                {preview.itemRows.map((decision) => (
+                  <tr key={`item-${decision.rowNumber}`} className="border-b last:border-0 hover:bg-muted/10">
+                    <td className="px-3 py-2">{decision.rowNumber}</td>
+                    <td className={`px-3 py-2 font-medium ${decision.state === 'error' ? 'text-destructive' : decision.state === 'warning' ? 'text-amber-700' : 'text-green-700'}`}>
+                      {decision.state === 'error' ? 'خطأ' : decision.state === 'warning' ? 'تحذير' : decision.state === 'empty' ? 'فارغ' : decision.action === 'update-item' ? 'تحديث' : 'إضافة'}
+                      {decision.errors.length > 0 && <div>{decision.errors.map((issue) => issue.message).join('؛ ')}</div>}
+                    </td>
                     {previewCols.map((c) => (
-                      <td key={c.label} className="px-3 py-2">{c.get(r)}</td>
+                      <td key={c.label} className="px-3 py-2">{c.get(decision.row as ImportRow)}</td>
                     ))}
+                  </tr>
+                ))}
+                {preview.openingBatchRows.map((decision) => (
+                  <tr key={`batch-${decision.rowNumber}`} className="border-b last:border-0 hover:bg-muted/10">
+                    <td className="px-3 py-2">{decision.rowNumber}</td>
+                    <td className={`px-3 py-2 font-medium ${decision.state === 'error' ? 'text-destructive' : decision.state === 'warning' ? 'text-amber-700' : 'text-green-700'}`}>
+                      دفعة {decision.state === 'error' ? '— خطأ' : decision.state === 'warning' ? '— تحذير' : '— جاهزة'}
+                      {decision.errors.length > 0 && <div>{decision.errors.map((issue) => issue.message).join('؛ ')}</div>}
+                    </td>
+                    <td className="px-3 py-2">{String(decision.row.code ?? '—')}</td>
+                    <td className="px-3 py-2">{String(decision.row.quantity ?? '—')}</td>
+                    <td className="px-3 py-2">{String(decision.row.batchNumber ?? '—')}</td>
+                    <td className="px-3 py-2">{String(decision.row.expiryDate ?? '—')}</td>
+                    <td className="px-3 py-2">{String(decision.row.supplier ?? '—')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -539,7 +652,7 @@ export function ImportTab() {
       )}
 
       {/* Step 3 — Mode + Import */}
-      {rows.length > 0 && (
+      {totalPayloadRows > 0 && (
         <div className="rounded-lg border p-4 space-y-4">
           <div className="flex items-center gap-2">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">٣</span>
@@ -552,7 +665,10 @@ export function ImportTab() {
             <div className="inline-flex rounded-lg border bg-muted p-0.5 gap-0.5">
               <button
                 type="button"
-                onClick={() => setImportMode('insert')}
+                onClick={() => {
+                  setImportMode('insert');
+                  void runPreview(importPayload, 'insert');
+                }}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                   importMode === 'insert'
                     ? 'bg-background text-foreground shadow-sm'
@@ -563,7 +679,10 @@ export function ImportTab() {
               </button>
               <button
                 type="button"
-                onClick={() => setImportMode('upsert')}
+                onClick={() => {
+                  setImportMode('upsert');
+                  void runPreview(importPayload, 'upsert');
+                }}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                   importMode === 'upsert'
                     ? 'bg-background text-foreground shadow-sm'
@@ -580,11 +699,11 @@ export function ImportTab() {
             </p>
           </div>
 
-          <Button onClick={() => void handleImport()} disabled={importing} className="gap-2">
+          <Button onClick={() => void handleImport()} disabled={importing || previewing || !preview?.valid} className="gap-2">
             {importing
               ? <Loader2 className="h-4 w-4 animate-spin" />
               : <FileSpreadsheet className="h-4 w-4" />}
-            {importing ? 'جارٍ الاستيراد…' : `${importMode === 'upsert' ? 'تحديث/إضافة' : 'استيراد'} ${rows.length} مادة`}
+            {previewing ? 'جارٍ فحص الملف…' : importing ? 'جارٍ الاستيراد…' : `${importMode === 'upsert' ? 'تحديث/إضافة' : 'استيراد'} ${totalPayloadRows} صف`}
           </Button>
         </div>
       )}
@@ -981,14 +1100,45 @@ export function ImportEquipmentTab() {
 }
 
 interface ImportRow {
-  [key: string]: string | number | undefined;
+  [key: string]: unknown;
 }
 
 interface ImportResult {
   created: number;
   updated?: number;
+  openingBatches?: number;
   errors: { row: number; name: string; error: string }[];
   warnings?: { row: number; name: string; warning: string }[];
+}
+
+interface ImportPreview {
+  valid: boolean;
+  error?: string;
+  summary: {
+    totalRows: number;
+    validRows: number;
+    warningRows: number;
+    errorRows: number;
+    newItems: number;
+    updatedItems: number;
+    openingBatches: number;
+  };
+  itemRows: ImportPreviewRow[];
+  openingBatchRows: ImportPreviewRow[];
+}
+
+interface ImportPayload {
+  items: ImportRow[];
+  openingBatches: ImportRow[];
+}
+
+interface ImportPreviewRow {
+  rowNumber: number;
+  state: 'valid' | 'warning' | 'error' | 'empty';
+  action: string;
+  row: Record<string, unknown>;
+  errors: { code: string; message: string }[];
+  warnings: { code: string; message: string }[];
 }
 
 

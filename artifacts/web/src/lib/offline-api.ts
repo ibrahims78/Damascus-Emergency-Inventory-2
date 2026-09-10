@@ -1,7 +1,10 @@
 import { dmePackageSummary, readDmeSyncPackageInWorker, writeDmeSyncPackage } from './dme-sync-browser';
 import {
   createCategoryLookup,
+  createUnitLookup,
+  DEFAULT_INVENTORY_UNITS,
   normalizeHeader,
+  validateInventoryOpeningBatchRows,
   validateInventoryImportRows,
 } from '@workspace/api-zod';
 
@@ -1048,11 +1051,94 @@ async function route(pathname: string, searchParams: URLSearchParams, method: st
       return json({ itemId: item?.id ?? null, requestedQuantity: Number(searchParams.get('quantity') ?? 0), allocations: [], expiredBatches: [] });
     });
   }
+  if (pathname === '/api/items/bulk-import/preview' && method === 'POST') {
+    return read((state) => {
+      const body = readBody(init);
+      const rawItems = Array.isArray(body)
+        ? body
+        : Array.isArray(body.items) ? body.items : [];
+      const rawBatches = !Array.isArray(body) && Array.isArray(body.openingBatches)
+        ? body.openingBatches
+        : [];
+      const mode = searchParams.get('mode') === 'upsert' ? 'upsert' as const : 'insert' as const;
+      const existingByCode = new Map(
+        state.items
+          .filter((item) => item.isActive !== false && text(item.code))
+          .map((item) => [text(item.code), {
+            id: numberValue(item.id),
+            code: text(item.code) || null,
+            name: text(item.name),
+            requiresExpiryTracking: Boolean(item.requiresExpiryTracking),
+            requiresBatchTracking: Boolean(item.requiresBatchTracking),
+          }]),
+      );
+      const itemRows = validateInventoryImportRows(
+        rawItems.filter((entry: unknown): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'),
+        {
+          mode,
+          categories: createCategoryLookup(state.categories),
+          existingByCode,
+          units: createUnitLookup(DEFAULT_INVENTORY_UNITS),
+        },
+      );
+      const projectedByCode = new Map(existingByCode);
+      for (const decision of itemRows) {
+        if (decision.state !== 'error' && decision.action === 'create-item' && decision.row.code) {
+          projectedByCode.set(decision.row.code, {
+            id: -decision.row.rowNumber,
+            code: decision.row.code,
+            name: decision.row.name,
+            requiresExpiryTracking: false,
+            requiresBatchTracking: false,
+          });
+        }
+      }
+      const openingBatchRows = validateInventoryOpeningBatchRows(
+        rawBatches.filter((entry: unknown): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'),
+        { existingByCode: projectedByCode },
+      );
+      const all = [...itemRows, ...openingBatchRows];
+      const errors = all.filter((decision) => decision.state === 'error');
+      const warnings = all.filter((decision) => decision.warnings.length > 0);
+      return json({
+        valid: errors.length === 0 && all.some((decision) => decision.state !== 'empty'),
+        summary: {
+          totalRows: all.filter((decision) => decision.state !== 'empty').length,
+          validRows: all.filter((decision) => decision.state === 'valid' || decision.state === 'warning').length,
+          warningRows: warnings.length,
+          errorRows: errors.length,
+          newItems: itemRows.filter((decision) => decision.action === 'create-item').length,
+          updatedItems: itemRows.filter((decision) => decision.action === 'update-item').length,
+          openingBatches: openingBatchRows.filter((decision) => decision.action === 'create-opening-batch').length +
+            itemRows.filter((decision) => decision.createsOpeningBatch).length,
+        },
+        itemRows: itemRows.map((decision) => ({
+          rowNumber: decision.row.rowNumber,
+          state: decision.state,
+          action: decision.action,
+          row: decision.row,
+          errors: decision.errors,
+          warnings: decision.warnings,
+        })),
+        openingBatchRows: openingBatchRows.map((decision) => ({
+          rowNumber: decision.row.rowNumber,
+          state: decision.state,
+          action: decision.action,
+          row: decision.row,
+          errors: decision.errors,
+          warnings: decision.warnings,
+        })),
+      });
+    });
+  }
   if (pathname === '/api/items/bulk-import' && method === 'POST') {
     if (!roleAllowed(currentUser, ['admin', 'warehouse_manager'])) return failure(403, 'ليس لديك صلاحية');
     return mutate((state) => {
       const body = readBody(init);
       const input = Array.isArray(body) ? body : Array.isArray((body as { items?: unknown }).items) ? (body as { items: unknown[] }).items : [];
+      const openingInput = !Array.isArray(body) && Array.isArray((body as { openingBatches?: unknown }).openingBatches)
+        ? (body as { openingBatches: unknown[] }).openingBatches
+        : [];
       const mode = searchParams.get('mode') === 'upsert' ? 'upsert' as const : 'insert' as const;
       const categories = createCategoryLookup(state.categories);
       const existingByCode = new Map(
@@ -1068,10 +1154,40 @@ async function route(pathname: string, searchParams: URLSearchParams, method: st
       );
       const decisions = validateInventoryImportRows(
         input.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'),
-        { mode, categories, existingByCode },
+        { mode, categories, existingByCode, units: createUnitLookup(DEFAULT_INVENTORY_UNITS) },
       );
+      const projectedByCode = new Map(existingByCode);
+      for (const decision of decisions) {
+        if (decision.state !== 'error' && decision.action === 'create-item' && decision.row.code) {
+          projectedByCode.set(decision.row.code, {
+            id: -decision.row.rowNumber,
+            code: decision.row.code,
+            name: decision.row.name,
+            requiresExpiryTracking: false,
+            requiresBatchTracking: false,
+          });
+        }
+      }
+      const batchDecisions = validateInventoryOpeningBatchRows(
+        openingInput.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'),
+        { existingByCode: projectedByCode },
+      );
+      const preflightErrors = [...decisions, ...batchDecisions]
+        .filter((decision) => decision.state === 'error');
+      if (preflightErrors.length > 0) {
+        return json({
+          error: 'لا يمكن تنفيذ الاستيراد قبل معالجة الأخطاء الحرجة',
+          valid: false,
+          errors: preflightErrors.map((decision) => ({
+            row: decision.row.rowNumber,
+            name: decision.row.code || `صف ${decision.row.rowNumber}`,
+            error: decision.errors.map((issue) => issue.message).join('؛ '),
+          })),
+        }, 422);
+      }
       let created = 0;
       let updated = 0;
+      let openingBatches = 0;
       const errors: Array<{ row: number; name: string; error: string }> = [];
       const warnings: Array<{ row: number; name: string; warning: string }> = [];
       for (const decision of decisions) {
@@ -1145,7 +1261,50 @@ async function route(pathname: string, searchParams: URLSearchParams, method: st
           quantity: existing ? existing.currentStock : item.currentStock,
         });
       }
-      return json({ created, updated, inserted: created, skipped: errors.length, errors, warnings });
+      for (const decision of batchDecisions) {
+        if (decision.state === 'empty') continue;
+        const item = state.items.find((entry) => text(entry.code) === decision.row.code);
+        if (!item) return failure(400, `المادة ذات الرمز ${decision.row.code} غير موجودة`);
+        const quantity = numberValue(decision.row.quantity);
+        const batch = {
+          id: nextId(state),
+          itemId: item.id,
+          batchNumber: decision.row.batchNumber,
+          receivedQuantity: quantity,
+          remainingQuantity: quantity,
+          expiryDate: decision.row.expiryDate,
+          supplier: decision.row.supplier,
+          deliveryNoteNumber: decision.row.deliveryNoteNumber ?? `استيراد-دفعة-${item.id}-${decision.row.rowNumber}`,
+          deliveryNoteDate: decision.row.deliveryNoteDate ?? now().slice(0, 10),
+        };
+        item.currentStock = numberValue(item.currentStock) + quantity;
+        state.inventoryBatches.push(batch);
+        const transaction = {
+          id: nextId(state),
+          type: 'in',
+          documentNumber: batch.deliveryNoteNumber,
+          transactionDate: batch.deliveryNoteDate,
+          itemId: item.id,
+          quantity,
+          notes: null,
+          createdBy: currentUser.id,
+          createdAt: now(),
+        };
+        state.transactions.unshift(transaction);
+        recordOfflineChange(state, 'inventory_batch', Number(batch.id), 'create', {
+          ...batch,
+          itemGlobalId: state.entityIds.find((entry) => entry.entityType === 'item' && entry.localId === Number(item.id))?.globalId ?? null,
+        });
+        recordOfflineChange(state, 'transaction', Number(transaction.id), 'create', {
+          type: transaction.type,
+          documentNumber: transaction.documentNumber,
+          itemId: transaction.itemId,
+          quantity: transaction.quantity,
+        });
+        addAudit(state, currentUser, 'create', 'transaction', Number(transaction.id));
+        openingBatches += 1;
+      }
+      return json({ created, updated, openingBatches, inserted: created, skipped: errors.length, errors, warnings });
     });
   }
 

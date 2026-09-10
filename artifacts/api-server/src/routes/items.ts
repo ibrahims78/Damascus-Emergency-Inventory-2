@@ -21,7 +21,11 @@ import {
 } from "../lib/inventory-movement-core";
 import {
   createCategoryLookup,
+  createUnitLookup,
+  DEFAULT_INVENTORY_UNITS,
+  INVENTORY_TEMPLATE_VERSION,
   normalizeHeader,
+  validateInventoryOpeningBatchRows,
   validateInventoryImportRows,
 } from "@workspace/api-zod";
 import {
@@ -29,6 +33,10 @@ import {
   ITEM_HISTORY_TYPES,
   type ItemHistoryType,
 } from "../lib/item-history-service";
+import {
+  createInventoryMovementInTransaction,
+  movementContextFromRequest,
+} from "../lib/inventory-movement-service";
 import { eq, and, ne, ilike, or, lte, sql, isNotNull, asc, desc, type AnyColumn } from "drizzle-orm";
 
 const router = Router();
@@ -48,6 +56,137 @@ function parseNonNegativeInteger(value: unknown, fallback: number) {
 function isUniqueViolation(error: unknown) {
   const candidate = error as { cause?: { code?: string }; code?: string };
   return candidate?.cause?.code === "23505" || candidate?.code === "23505";
+}
+
+type ImportInput = Record<string, unknown>;
+type ImportAnalysis = {
+  valid: boolean;
+  summary: {
+    totalRows: number;
+    validRows: number;
+    warningRows: number;
+    errorRows: number;
+    newItems: number;
+    updatedItems: number;
+    openingBatches: number;
+  };
+  itemRows: ReturnType<typeof validateInventoryImportRows>;
+  openingBatchRows: ReturnType<typeof validateInventoryOpeningBatchRows>;
+};
+
+function importArrays(body: unknown) {
+  if (Array.isArray(body)) {
+    return { items: body.filter(isImportInput), openingBatches: [] as ImportInput[] };
+  }
+  const value = body as { items?: unknown; openingBatches?: unknown } | null;
+  return {
+    items: Array.isArray(value?.items) ? value.items.filter(isImportInput) : [],
+    openingBatches: Array.isArray(value?.openingBatches)
+      ? value.openingBatches.filter(isImportInput)
+      : [],
+  };
+}
+
+function isImportInput(value: unknown): value is ImportInput {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+async function analyzeImport(body: unknown, mode: "insert" | "upsert"): Promise<ImportAnalysis> {
+  const { items, openingBatches } = importArrays(body);
+  const [allCategories, existing] = await Promise.all([
+    db.select({ id: categoriesTable.id, name: categoriesTable.name }).from(categoriesTable),
+    db
+      .select({
+        id: itemsTable.id,
+        code: itemsTable.code,
+        name: itemsTable.name,
+        requiresExpiryTracking: itemsTable.requiresExpiryTracking,
+        requiresBatchTracking: itemsTable.requiresBatchTracking,
+      })
+      .from(itemsTable)
+      .where(isNotNull(itemsTable.code)),
+  ]);
+  const existingByCode = new Map(
+    existing
+      .filter((item) => item.code)
+      .map((item) => [item.code!.trim(), item]),
+  );
+  const categories = createCategoryLookup(allCategories);
+  const itemRows = validateInventoryImportRows(items, {
+    mode,
+    categories,
+    existingByCode,
+    units: createUnitLookup(DEFAULT_INVENTORY_UNITS),
+  });
+
+  // New materials are available by code to the second sheet during this
+  // preflight, but are not written until the complete file passes validation.
+  const projectedByCode = new Map(existingByCode);
+  for (const decision of itemRows) {
+    if (
+      decision.state !== "error" &&
+      decision.action === "create-item" &&
+      decision.row.code
+    ) {
+      projectedByCode.set(decision.row.code, {
+        id: -decision.row.rowNumber,
+        code: decision.row.code,
+        name: decision.row.name,
+        requiresExpiryTracking: false,
+        requiresBatchTracking: false,
+      });
+    }
+  }
+  const openingBatchRows = validateInventoryOpeningBatchRows(openingBatches, {
+    existingByCode: projectedByCode,
+  });
+  const allDecisions = [...itemRows, ...openingBatchRows];
+  const errors = allDecisions.filter((decision) => decision.state === "error");
+  const warnings = allDecisions.filter((decision) => decision.warnings.length > 0);
+  const validRows = allDecisions.filter(
+    (decision) => decision.state === "valid" || decision.state === "warning",
+  );
+  return {
+    valid: errors.length === 0 && (itemRows.length > 0 || openingBatchRows.length > 0),
+    summary: {
+      totalRows: allDecisions.filter((decision) => decision.state !== "empty").length,
+      validRows: validRows.length,
+      warningRows: warnings.length,
+      errorRows: errors.length,
+      newItems: itemRows.filter((decision) => decision.action === "create-item").length,
+      updatedItems: itemRows.filter((decision) => decision.action === "update-item").length,
+      openingBatches: openingBatchRows.filter(
+        (decision) => decision.action === "create-opening-batch",
+      ).length + itemRows.filter(
+        (decision) => decision.createsOpeningBatch && decision.action === "create-item",
+      ).length,
+    },
+    itemRows,
+    openingBatchRows,
+  };
+}
+
+function serializeAnalysis(analysis: ImportAnalysis) {
+  return {
+    valid: analysis.valid,
+    summary: analysis.summary,
+    itemRows: analysis.itemRows.map((decision) => ({
+      rowNumber: decision.row.rowNumber,
+      state: decision.state,
+      action: decision.action,
+      row: decision.row,
+      errors: decision.errors,
+      warnings: decision.warnings,
+    })),
+    openingBatchRows: analysis.openingBatchRows.map((decision) => ({
+      rowNumber: decision.row.rowNumber,
+      state: decision.state,
+      action: decision.action,
+      row: decision.row,
+      errors: decision.errors,
+      warnings: decision.warnings,
+    })),
+  };
 }
 
 // GET /api/items
@@ -307,6 +446,31 @@ router.post(
   }
 );
 
+// POST /api/items/bulk-import/preview
+router.post(
+  "/bulk-import/preview",
+  requireAuth,
+  requireRole("admin", "warehouse_manager"),
+  async (req, res) => {
+    try {
+      const { items, openingBatches } = importArrays(req.body);
+      if (items.length + openingBatches.length === 0) {
+        res.status(400).json({ error: "يجب إرسال صفوف استيراد صالحة" });
+        return;
+      }
+      if (items.length + openingBatches.length > 1000) {
+        res.status(400).json({ error: "الحد الأقصى للاستيراد 1000 صف في المرة الواحدة" });
+        return;
+      }
+      const mode = req.query.mode === "upsert" ? "upsert" : "insert";
+      res.json(serializeAnalysis(await analyzeImport(req.body, mode)));
+    } catch (error) {
+      console.error(error);
+      res.status(400).json({ error: "تعذر فحص ملف الاستيراد" });
+    }
+  },
+);
+
 // POST /api/items/bulk-import
 router.post(
   "/bulk-import",
@@ -314,208 +478,247 @@ router.post(
   requireRole("admin", "warehouse_manager"),
   async (req, res) => {
     try {
-      const items = req.body;
-      if (!Array.isArray(items) || items.length === 0) {
-        res.status(400).json({ error: "يجب إرسال قائمة مواد صالحة" });
+      const { items, openingBatches } = importArrays(req.body);
+      if (items.length + openingBatches.length === 0) {
+        res.status(400).json({ error: "يجب إرسال صفوف استيراد صالحة" });
         return;
       }
-      if (items.length > 1000) {
+      if (items.length + openingBatches.length > 1000) {
         res.status(400).json({ error: "الحد الأقصى للاستيراد 1000 صف في المرة الواحدة" });
         return;
       }
+      const mode = req.query.mode === "upsert" ? "upsert" : "insert";
+      const analysis = await analyzeImport(req.body, mode);
+      if (!analysis.valid) {
+        res.status(422).json({
+          error: "لا يمكن تنفيذ الاستيراد قبل معالجة الأخطاء الحرجة",
+          ...serializeAnalysis(analysis),
+        });
+        return;
+      }
 
-      // Fetch all categories for name→id resolution
       const allCategories = await db
         .select({ id: categoriesTable.id, name: categoriesTable.name })
         .from(categoriesTable);
-      const mode = (req.query.mode as string) === "upsert" ? "upsert" : "insert";
       const categoryMap = createCategoryLookup(allCategories);
-      const existing = await db
-        .select({
-          id: itemsTable.id,
-          code: itemsTable.code,
-          name: itemsTable.name,
-          requiresExpiryTracking: itemsTable.requiresExpiryTracking,
-          requiresBatchTracking: itemsTable.requiresBatchTracking,
-        })
-        .from(itemsTable)
-        .where(isNotNull(itemsTable.code));
-      const existingByCode = new Map(
-        existing
-          .filter((item) => item.code)
-          .map((item) => [item.code!.trim(), item]),
-      );
-      const decisions = validateInventoryImportRows(items, {
-        mode,
-        categories: categoryMap,
-        existingByCode,
+      const context = movementContextFromRequest(req);
+      const node = await ensureNodeIdentity("web");
+      const openingDate = new Date().toISOString().slice(0, 10);
+      const auditEvents: Array<{ action: "create" | "update"; id: number; name: string }> = [];
+      const itemIdsByCode = new Map<string, number>();
+      let created = 0;
+      let updated = 0;
+      let openingBatchCount = 0;
+
+      await db.transaction(async (tx) => {
+        for (const decision of analysis.itemRows) {
+          if (decision.state === "empty") continue;
+          const row = decision.row;
+          const categoryId = row.categoryName
+            ? categoryMap.get(normalizeHeader(row.categoryName)) ?? null
+            : null;
+          let saved;
+          if (decision.action === "update-item" && decision.existingItem) {
+            [saved] = await tx
+              .update(itemsTable)
+              .set({
+                name: row.name,
+                categoryId,
+                unit: row.unit,
+                minStock: row.minStock ?? 0,
+                location: row.location,
+                notes: row.notes,
+                updatedAt: new Date(),
+              })
+              .where(eq(itemsTable.id, decision.existingItem.id))
+              .returning();
+            updated++;
+            auditEvents.push({ action: "update", id: saved.id, name: saved.name });
+          } else {
+            [saved] = await tx
+              .insert(itemsTable)
+              .values({
+                code: row.code,
+                name: row.name,
+                categoryId,
+                itemType: "item",
+                unit: row.unit,
+                currentStock: 0,
+                minStock: row.minStock ?? 0,
+                location: row.location,
+                notes: row.notes,
+              })
+              .returning();
+            created++;
+            auditEvents.push({ action: "create", id: saved.id, name: saved.name });
+          }
+
+          if (row.code) itemIdsByCode.set(row.code, saved.id);
+          const globalId = await ensureEntityIdentity(tx, "item", saved.id);
+          await recordLocalChange(tx, {
+            nodeId: node.nodeId,
+            entityType: "item",
+            localEntityId: saved.id,
+            globalId,
+            changeType: decision.action === "update-item" ? "update" : "create",
+            payload: { ...saved },
+          });
+
+          // An upsert is definition-only: a spreadsheet cannot silently alter
+          // an existing balance or create a second opening batch.
+          if (decision.createsOpeningBatch && decision.action === "create-item") {
+            await createInventoryMovementInTransaction(tx, {
+              kind: "in",
+              itemType: "item",
+              itemId: saved.id,
+              quantity: row.currentStock,
+              deliveryNoteNumber: `استيراد-افتتاحي-${saved.id}-${row.rowNumber}`,
+              deliveryNoteDate: openingDate,
+              documentDate: openingDate,
+              supplySource: "central_warehouses",
+              expiryDate: row.expiryDate,
+              batchNumber: row.batchNumber,
+              supplier: row.supplier,
+              notes: row.notes,
+            }, context, node);
+            openingBatchCount++;
+          }
+        }
+
+        for (const decision of analysis.openingBatchRows) {
+          if (decision.state === "empty") continue;
+          const itemId = decision.row.code ? itemIdsByCode.get(decision.row.code) : undefined;
+          if (!itemId) throw new Error("IMPORT_ITEM_NOT_FOUND_AFTER_PREFLIGHT");
+          await createInventoryMovementInTransaction(tx, {
+            kind: "in",
+            itemType: "item",
+            itemId,
+            quantity: decision.row.quantity,
+            deliveryNoteNumber: decision.row.deliveryNoteNumber ?? `استيراد-دفعة-${itemId}-${decision.row.rowNumber}`,
+            deliveryNoteDate: decision.row.deliveryNoteDate ?? openingDate,
+            documentDate: decision.row.deliveryNoteDate ?? openingDate,
+            supplySource: "central_warehouses",
+            expiryDate: decision.row.expiryDate,
+            batchNumber: decision.row.batchNumber,
+            supplier: decision.row.supplier,
+          }, context, node);
+          openingBatchCount++;
+        }
       });
 
-      const results: {
-        created: number;
-        updated: number;
-        errors: { row: number; name: string; error: string }[];
-        warnings: { row: number; name: string; warning: string }[];
-      } = { created: 0, updated: 0, errors: [], warnings: [] };
-
-      const bulkNode = await ensureNodeIdentity("web");
-
-      for (let i = 0; i < items.length; i++) {
-        const decision = decisions[i];
-        const rowNum = decision.row.rowNumber;
-        const name = decision.row.name || `صف ${rowNum}`;
-        if (decision.state === "empty") continue;
-        if (decision.warnings.length) {
-          for (const warning of decision.warnings) {
-            results.warnings.push({ row: rowNum, name, warning: warning.message });
-          }
-        }
-        if (decision.errors.length) {
-          results.errors.push({
-            row: rowNum,
-            name,
-            error: decision.errors.map((issue) => issue.message).join("؛ "),
-          });
-          continue;
-        }
-
-        const row = decision.row;
-        const categoryId = row.categoryName
-          ? categoryMap.get(normalizeHeader(row.categoryName)) ?? null
-          : null;
-        const currentStock = row.currentStock ?? 0;
-        const minStock = row.minStock ?? 0;
-        const code = row.code;
-        const isUpdate = Boolean(decision.existingItem);
-
-        const values = {
-          code,
-          name,
-          categoryId,
-          itemType: "item" as const,
-          unit: row.unit,
-          currentStock,
-          minStock,
-          expiryDate: row.expiryDate,
-          batchNumber: row.batchNumber,
-          location: row.location,
-          supplier: row.supplier,
-          notes: row.notes,
-        };
-
-        try {
-          if (mode === "upsert" && code !== null) {
-            const [saved] = await db.transaction(async (tx) => {
-              const [row] = await tx
-                .insert(itemsTable)
-                .values(values)
-                .onConflictDoUpdate({
-                  target: itemsTable.code,
-                  set: {
-                    name: values.name,
-                    categoryId: values.categoryId,
-                    unit: values.unit,
-                    minStock: values.minStock,
-                    location: values.location,
-                    notes: values.notes,
-                  },
-                })
-                .returning();
-              const globalId = await ensureEntityIdentity(tx, "item", row.id);
-              await recordLocalChange(tx, {
-                nodeId: bulkNode.nodeId,
-                entityType: "item",
-                localEntityId: row.id,
-                globalId,
-                changeType: isUpdate ? "update" : "create",
-                payload: {
-                  ...row,
-                  categoryGlobalId: row.categoryId
-                    ? await ensureEntityIdentity(tx, "category", row.categoryId)
-                    : null,
-                },
-              });
-              return [row];
-            });
-            if (isUpdate) {
-              results.updated++;
-              await auditLog({
-                req, action: "update", entityType: "item", entityId: saved.id,
-                details: { name: saved.name, source: "bulk-import-upsert" },
-              });
-            } else {
-              results.created++;
-              await auditLog({
-                req, action: "create", entityType: "item", entityId: saved.id,
-                details: { name: saved.name, source: "bulk-import" },
-              });
-            }
-          } else {
-            const [created] = await db.transaction(async (tx) => {
-              const [row] = await tx.insert(itemsTable).values(values).returning();
-              const globalId = await ensureEntityIdentity(tx, "item", row.id);
-              await recordLocalChange(tx, {
-                nodeId: bulkNode.nodeId,
-                entityType: "item",
-                localEntityId: row.id,
-                globalId,
-                changeType: "create",
-                payload: {
-                  ...row,
-                  categoryGlobalId: row.categoryId
-                    ? await ensureEntityIdentity(tx, "category", row.categoryId)
-                    : null,
-                },
-              });
-              if (row.currentStock > 0) {
-                const openingDate = new Date().toISOString().slice(0, 10);
-                const [batch] = await tx.insert(inventoryBatchesTable).values({
-                  itemId: row.id,
-                  receivedQuantity: row.currentStock,
-                  remainingQuantity: row.currentStock,
-                   batchNumber: row.batchNumber,
-                   expiryDate: row.expiryDate,
-                   supplier: row.supplier,
-                   deliveryNoteNumber: `افتتاحي-${row.id}`,
-                  deliveryNoteDate: openingDate,
-                  supplySource: "central_warehouses",
-                }).returning();
-                const batchGlobalId = await ensureEntityIdentity(tx, "inventory_batch", batch.id);
-                await recordLocalChange(tx, {
-                  nodeId: bulkNode.nodeId,
-                  entityType: "inventory_batch",
-                  localEntityId: batch.id,
-                  globalId: batchGlobalId,
-                  changeType: "create",
-                  payload: { ...batch, itemGlobalId: globalId },
-                });
-              }
-              return [row];
-            });
-            results.created++;
-            await auditLog({
-              req, action: "create", entityType: "item", entityId: created.id,
-              details: { name: created.name, source: "bulk-import" },
-            });
-          }
-        } catch (err: unknown) {
-          const e = err as { cause?: { code?: string }; code?: string };
-          const isDuplicate = e?.cause?.code === "23505" || e?.code === "23505";
-          results.errors.push({
-            row: rowNum,
-            name,
-            error: isDuplicate ? "الرمز مستخدم مسبقاً — استخدم وضع «تحديث وإضافة» لتحديثه" : "خطأ في الإدراج",
-          });
-        }
+      await Promise.all(auditEvents.map((event) =>
+        auditLog({
+          req,
+          action: event.action,
+          entityType: "item",
+          entityId: event.id,
+          details: { name: event.name, source: "bulk-import" },
+        }),
+      ));
+      res.json({
+        created,
+        updated,
+        openingBatches: openingBatchCount,
+        inserted: created,
+        skipped: 0,
+        errors: [],
+        warnings: [
+          ...analysis.itemRows.flatMap((decision) =>
+            decision.warnings.map((warning) => ({
+              row: decision.row.rowNumber,
+              name: decision.row.name,
+              warning: warning.message,
+            })),
+          ),
+          ...analysis.openingBatchRows.flatMap((decision) =>
+            decision.warnings.map((warning) => ({
+              row: decision.row.rowNumber,
+              name: decision.row.code ?? `صف ${decision.row.rowNumber}`,
+              warning: warning.message,
+            })),
+          ),
+        ],
+        summary: analysis.summary,
+      });
+      runAlertWorker().catch((error) => console.error("Alert worker:", error));
+    } catch (error) {
+      console.error(error);
+      if (isUniqueViolation(error)) {
+        res.status(409).json({ error: "يوجد رمز أو دفعة مكررة؛ لم يتم حفظ أي صف" });
+        return;
       }
-
-      res.json(results);
-      runAlertWorker();
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Internal server error" });
+      res.status(500).json({ error: "تعذر تنفيذ الاستيراد؛ لم يتم حفظ أي صف" });
     }
-  }
+  },
+);
+
+// GET /api/items/export
+router.get(
+  "/export",
+  requireAuth,
+  requireRole("admin", "warehouse_manager"),
+  async (_req, res) => {
+    try {
+      const [items, batches] = await Promise.all([
+        db
+          .select({
+            code: itemsTable.code,
+            name: itemsTable.name,
+            unit: itemsTable.unit,
+            categoryId: itemsTable.categoryId,
+            minStock: itemsTable.minStock,
+            location: itemsTable.location,
+            notes: itemsTable.notes,
+          })
+          .from(itemsTable)
+          .where(eq(itemsTable.isActive, true)),
+        db
+          .select({
+            code: itemsTable.code,
+            quantity: inventoryBatchesTable.remainingQuantity,
+            batchNumber: inventoryBatchesTable.batchNumber,
+            expiryDate: inventoryBatchesTable.expiryDate,
+            supplier: inventoryBatchesTable.supplier,
+            deliveryNoteNumber: inventoryBatchesTable.deliveryNoteNumber,
+            deliveryNoteDate: inventoryBatchesTable.deliveryNoteDate,
+          })
+          .from(inventoryBatchesTable)
+          .innerJoin(itemsTable, eq(inventoryBatchesTable.itemId, itemsTable.id))
+          .where(eq(itemsTable.isActive, true)),
+      ]);
+      const categoryRows = await db
+        .select({ id: categoriesTable.id, name: categoriesTable.name })
+        .from(categoriesTable);
+      const categoryById = new Map(categoryRows.map((category) => [category.id, category.name]));
+      res.json({
+        version: INVENTORY_TEMPLATE_VERSION,
+        exportedAt: new Date().toISOString(),
+        items: items.map((item) => ({
+          code: item.code ?? "",
+          name: item.name,
+          unit: item.unit,
+          categoryName: item.categoryId ? categoryById.get(item.categoryId) ?? "" : "",
+          minStock: item.minStock,
+          location: item.location ?? "",
+          notes: item.notes ?? "",
+        })),
+        openingBatches: batches
+          .filter((batch) => Number(batch.quantity) > 0)
+          .map((batch) => ({
+            code: batch.code ?? "",
+            quantity: batch.quantity,
+            batchNumber: batch.batchNumber ?? "",
+            expiryDate: batch.expiryDate ?? "",
+            supplier: batch.supplier ?? "",
+            deliveryNoteNumber: batch.deliveryNoteNumber ?? "",
+            deliveryNoteDate: batch.deliveryNoteDate ?? "",
+          })),
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "تعذر تصدير بيانات المخزون" });
+    }
+  },
 );
 
 // GET /api/items/fefo-preview

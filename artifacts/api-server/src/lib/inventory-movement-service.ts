@@ -94,6 +94,7 @@ export type MovementInput = {
   supplySource?: unknown;
   expiryDate?: unknown;
   batchNumber?: unknown;
+  supplier?: unknown;
   internalDeliveryNoteNumber?: unknown;
   internalDeliveryNoteDate?: unknown;
   deliveryDestination?: unknown;
@@ -515,6 +516,7 @@ async function createInbound(
       receivedQuantity: quantity,
       remainingQuantity: quantity,
       expiryDate: assertIsoDate(input.expiryDate, "الصلاحية"),
+      supplier: textOrNull(input.supplier),
       deliveryNoteNumber,
       deliveryNoteDate,
       supplySource: "central_warehouses",
@@ -1337,100 +1339,109 @@ async function buildMovementSyncPayload(
   return { transaction: txRow, effects };
 }
 
+export async function createInventoryMovementInTransaction(
+  tx: DbTransaction,
+  input: MovementInput,
+  context: MovementContext,
+  nodeOverride?: Awaited<ReturnType<typeof ensureNodeIdentity>>,
+) {
+  const node = nodeOverride ?? (await ensureNodeIdentity("web"));
+  const operationId = randomUUID();
+  const originSequence = await reserveOriginSequence(tx, node.nodeId);
+  const type = input.kind as TransactionType;
+  const documentNumber = await lockDocumentNumber(tx, type);
+
+  let entity: ReturnType<typeof assertEntityReference> | null = null;
+  if (input.kind !== "custody_return") {
+    entity = assertEntityReference(input.itemType, input.itemId, input.equipmentId);
+  }
+
+  let transaction;
+  switch (input.kind) {
+    case "in":
+      transaction = await createInbound(tx, context, input, entity!, documentNumber);
+      break;
+    case "out":
+      // The consumables route is intentionally exclusive. Personal
+      // custody has its own endpoint and audit type.
+      transaction = await createConsumableOut(tx, context, input, entity!, documentNumber);
+      break;
+    case "custody_out":
+      transaction = await createCustodyOut(tx, context, input, entity!, documentNumber);
+      break;
+    case "damage":
+      transaction = await createDamage(tx, context, input, entity!, documentNumber);
+      break;
+    case "custody_return":
+      transaction = await createCustodyReturn(tx, context, input, documentNumber);
+      break;
+    case "central_return":
+      transaction = await createCentralReturn(tx, context, input, entity!, documentNumber);
+      break;
+    case "adjust":
+      transaction = await createAdjustment(tx, context, input, documentNumber);
+      break;
+    default:
+      throw new InventoryMovementError("INVALID_MOVEMENT_TYPE", "نوع الحركة غير مدعوم");
+  }
+
+  const transactionGlobalId = await ensureEntityIdentity(
+    tx,
+    "transaction",
+    transaction.id,
+  );
+  await tx
+    .update(transactionsTable)
+    .set({
+      operationId,
+      originNodeId: node.nodeId,
+      originSequence,
+      documentNumberScope: `web:${type}`,
+    })
+    .where(eq(transactionsTable.id, transaction.id));
+  Object.assign(transaction, {
+    operationId,
+    originNodeId: node.nodeId,
+    originSequence,
+    documentNumberScope: `web:${type}`,
+  });
+  const syncPayload = await buildMovementSyncPayload(tx, {
+    type,
+    transaction,
+    entity,
+    input,
+    transactionGlobalId,
+  });
+  await recordLocalChange(tx, {
+    nodeId: node.nodeId,
+    operationId,
+    originSequence,
+    entityType: "transaction",
+    localEntityId: transaction.id,
+    globalId: transactionGlobalId,
+    changeType: "create",
+    payload: syncPayload,
+  });
+
+  await writeAudit(tx, context, "movement_created", transaction.id, {
+    movementType: transaction.type,
+    documentNumber: transaction.documentNumber,
+    itemType: transaction.itemType,
+    itemId: transaction.itemId,
+    equipmentId: transaction.equipmentId,
+    quantity: transaction.quantity,
+  });
+  return transaction;
+}
+
 export async function createInventoryMovement(
   input: MovementInput,
   context: MovementContext,
 ) {
   try {
-    const node = await ensureNodeIdentity("web");
-    const operationId = randomUUID();
-    return await db.transaction(async (tx) => {
-      const originSequence = await reserveOriginSequence(tx, node.nodeId);
-      const type = input.kind as TransactionType;
-      const documentNumber = await lockDocumentNumber(tx, type);
-
-      let entity: ReturnType<typeof assertEntityReference> | null = null;
-      if (input.kind !== "custody_return") {
-        entity = assertEntityReference(input.itemType, input.itemId, input.equipmentId);
-      }
-
-      let transaction;
-      switch (input.kind) {
-        case "in":
-          transaction = await createInbound(tx, context, input, entity!, documentNumber);
-          break;
-         case "out":
-           // The consumables route is intentionally exclusive. Personal
-           // custody has its own endpoint and audit type.
-           transaction = await createConsumableOut(tx, context, input, entity!, documentNumber);
-          break;
-        case "custody_out":
-          transaction = await createCustodyOut(tx, context, input, entity!, documentNumber);
-          break;
-        case "damage":
-          transaction = await createDamage(tx, context, input, entity!, documentNumber);
-          break;
-        case "custody_return":
-          transaction = await createCustodyReturn(tx, context, input, documentNumber);
-          break;
-        case "central_return":
-          transaction = await createCentralReturn(tx, context, input, entity!, documentNumber);
-          break;
-        case "adjust":
-          transaction = await createAdjustment(tx, context, input, documentNumber);
-          break;
-        default:
-          throw new InventoryMovementError("INVALID_MOVEMENT_TYPE", "نوع الحركة غير مدعوم");
-      }
-
-      const transactionGlobalId = await ensureEntityIdentity(
-        tx,
-        "transaction",
-        transaction.id,
-      );
-      await tx
-        .update(transactionsTable)
-        .set({
-          operationId,
-          originNodeId: node.nodeId,
-          originSequence,
-          documentNumberScope: `web:${type}`,
-        })
-        .where(eq(transactionsTable.id, transaction.id));
-      Object.assign(transaction, {
-        operationId,
-        originNodeId: node.nodeId,
-        originSequence,
-        documentNumberScope: `web:${type}`,
-      });
-      const syncPayload = await buildMovementSyncPayload(tx, {
-        type,
-        transaction,
-        entity,
-        input,
-        transactionGlobalId,
-      });
-      await recordLocalChange(tx, {
-        nodeId: node.nodeId,
-        operationId,
-        originSequence,
-        entityType: "transaction",
-        localEntityId: transaction.id,
-        globalId: transactionGlobalId,
-        changeType: "create",
-        payload: syncPayload,
-      });
-
-      await writeAudit(tx, context, "movement_created", transaction.id, {
-        movementType: transaction.type,
-        documentNumber: transaction.documentNumber,
-        itemType: transaction.itemType,
-        itemId: transaction.itemId,
-        equipmentId: transaction.equipmentId,
-        quantity: transaction.quantity,
-      });
-      return transaction;
-    });
+    return await db.transaction((tx) =>
+      createInventoryMovementInTransaction(tx, input, context),
+    );
   } catch (error) {
     // Failed sensitive operations are also auditable. This insert is outside
     // the rolled-back movement transaction by design, so the failure survives.
