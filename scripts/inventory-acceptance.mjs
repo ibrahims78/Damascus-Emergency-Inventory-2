@@ -60,6 +60,49 @@ function makeWorkbook(filePath) {
   XLSX.writeFile(workbook, filePath, { bookType: "xlsx" });
 }
 
+function makeWorkbookFromExport(filePath, exported) {
+  const workbook = XLSX.utils.book_new();
+  const itemRows = [
+    ["الرمز", "الاسم", "الوحدة", "التصنيف", "الحد الأدنى", "الموقع", "ملاحظات"],
+    ...exported.items.map((item) => [
+      item.code,
+      item.name,
+      item.unit,
+      item.categoryName,
+      item.minStock,
+      item.location,
+      item.notes,
+    ]),
+  ];
+  const batchRows = [
+    [
+      "رمز المادة",
+      "الكمية الافتتاحية",
+      "رقم الدفعة",
+      "تاريخ الصلاحية",
+      "المورد",
+      "رقم سند الإدخال",
+      "تاريخ سند الإدخال",
+    ],
+    ...exported.openingBatches.map((batch) => [
+      batch.code,
+      batch.quantity,
+      batch.batchNumber,
+      batch.expiryDate,
+      batch.supplier,
+      batch.deliveryNoteNumber,
+      batch.deliveryNoteDate,
+    ]),
+  ];
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(itemRows), "المواد");
+  XLSX.utils.book_append_sheet(
+    workbook,
+    XLSX.utils.aoa_to_sheet(batchRows),
+    "الأرصدة والدفعات الافتتاحية",
+  );
+  XLSX.writeFile(workbook, filePath, { bookType: "xlsx" });
+}
+
 function readWorkbook(filePath) {
   const workbook = XLSX.readFile(filePath, { cellDates: false });
   assert(workbook.SheetNames.includes("المواد"), "ورقة المواد غير قابلة للقراءة");
@@ -236,6 +279,54 @@ async function main() {
       "التصدير لم يعرض الدفعتين قبل الصرف",
       exportedBeforeReplay,
     );
+
+    const exportedSubset = {
+      version: exportedBeforeReplay.version,
+      items: exportedBeforeReplay.items.filter((candidate) => candidate.code === itemCode),
+      openingBatches: exportedBeforeReplay.openingBatches.filter((batch) => batch.code === itemCode),
+    };
+    const exportRoundTripPath = join(dataDir, "inventory-export-roundtrip.xlsx");
+    makeWorkbookFromExport(exportRoundTripPath, exportedSubset);
+    const exportRoundTripPayload = readWorkbook(exportRoundTripPath);
+    assert(
+      exportRoundTripPayload.items.length === 1 &&
+        exportRoundTripPayload.items[0]["الرمز"] === itemCode &&
+        exportRoundTripPayload.openingBatches.length === 2 &&
+        exportRoundTripPayload.openingBatches.every((row) => row["رمز المادة"] === itemCode),
+      "فقدت دورة التصدير وإعادة فتح XLSX بيانات المادة أو الدفعات",
+      exportRoundTripPayload,
+    );
+    const exportRoundTripPreview = await client.request("/api/items/bulk-import/preview?mode=upsert", {
+      method: "POST",
+      body: exportRoundTripPayload,
+    });
+    assert(
+      exportRoundTripPreview.status === 200 &&
+        exportRoundTripPreview.payload.valid === true &&
+        exportRoundTripPreview.payload.summary.openingBatches === 0 &&
+        exportRoundTripPreview.payload.openingBatchRows.every((row) =>
+          row.warnings.some((warning) => warning.code === "DUPLICATE_EXISTING_BATCH"),
+        ),
+      "فشلت معاينة ملف التصدير المعاد رفعه",
+      exportRoundTripPreview.payload,
+    );
+    const exportRoundTripImport = await client.request("/api/items/bulk-import?mode=upsert", {
+      method: "POST",
+      body: exportRoundTripPayload,
+    });
+    assert(
+      exportRoundTripImport.status === 200 &&
+        exportRoundTripImport.payload.created === 0 &&
+        exportRoundTripImport.payload.updated === 1 &&
+        exportRoundTripImport.payload.openingBatches === 0,
+      "إعادة رفع التصدير لم تكن تعريفية أو أنشأت دفعات إضافية",
+      exportRoundTripImport.payload,
+    );
+    const itemAfterExportRoundTrip = (await client.request("/api/items?limit=5000")).payload.items.find(
+      (candidate) => candidate.code === itemCode,
+    );
+    assert(Number(itemAfterExportRoundTrip?.currentStock) === 12, "تغير الرصيد بعد دورة التصدير", itemAfterExportRoundTrip);
+    console.log("✅ دورة التصدير: أُعيد فتح XLSX ورفعه بوضع upsert دون تغيير الرصيد أو تكرار الدفعات");
 
     const replayPreview = await client.request("/api/items/bulk-import/preview?mode=insert", {
       method: "POST",

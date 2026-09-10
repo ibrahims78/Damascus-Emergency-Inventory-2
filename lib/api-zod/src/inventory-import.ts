@@ -74,6 +74,7 @@ export type InventoryImportContext = {
 export type InventoryOpeningBatchContext = {
   existingByCode: Map<string, ExistingInventoryItem>;
   seenBatchKeys?: Set<string>;
+  existingBatchKeys?: Set<string>;
 };
 
 export type InventoryImportIssue = {
@@ -93,11 +94,12 @@ export type InventoryImportDecision = {
 
 export type InventoryOpeningBatchDecision = {
   state: InventoryImportRowState;
-  action: "none" | "create-opening-batch";
+  action: "none" | "create-opening-batch" | "skip-existing-batch";
   errors: InventoryImportIssue[];
   warnings: InventoryImportIssue[];
   row: InventoryOpeningBatchRow;
   existingItem: ExistingInventoryItem | null;
+  skipExistingBatch?: boolean;
 };
 
 export const INVENTORY_TEMPLATE_VERSION = "4.0";
@@ -562,14 +564,26 @@ export function validateInventoryOpeningBatchRow(
   if (context.seenBatchKeys?.has(batchKey)) {
     errors.push({ code: "DUPLICATE_BATCH_IN_FILE", message: "الدفعة مكررة داخل الملف" });
   }
+  const existingBatch = context.existingBatchKeys?.has(batchKey) ?? false;
+  if (existingBatch && errors.length === 0) {
+    warnings.push({
+      code: "DUPLICATE_EXISTING_BATCH",
+      message: "الدفعة موجودة مسبقًا؛ سيتم تجاهلها في وضع التحديث دون تغيير الرصيد",
+    });
+  }
 
   return {
     state: errors.length ? "error" : warnings.length ? "warning" : "valid",
-    action: errors.length ? "none" : "create-opening-batch",
+    action: errors.length
+      ? "none"
+      : existingBatch
+        ? "skip-existing-batch"
+        : "create-opening-batch",
     errors,
     warnings,
     row,
     existingItem,
+    skipExistingBatch: existingBatch && errors.length === 0,
   };
 }
 

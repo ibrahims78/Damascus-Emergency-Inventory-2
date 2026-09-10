@@ -31,7 +31,8 @@ pnpm --filter @workspace/web run dev
 ## النشر
 
 1. شغّل `pnpm run typecheck` و`pnpm run build`.
-2. شغّل `pnpm --filter @workspace/scripts run final:acceptance`.
+2. شغّل `pnpm test` و`pnpm run acceptance:inventory` و`pnpm run phase0:baseline`
+   بعد إزالة `DATABASE_URL` من جلسة الاختبار.
 3. راجع إعدادات `DATABASE_URL` و`SESSION_SECRET` في بيئة النشر.
 4. نفّذ نشر ريبليت من نقطة تحقق ناجحة.
 5. بعد النشر تحقّق من `GET /api/healthz` ومن تسجيل الدخول والتقارير.
@@ -95,6 +96,24 @@ pnpm --filter @workspace/web run dev
 خارج المستودع فلم تعد أوامر مدعومة، حتى لا تشير وثائق التشغيل إلى ملفات غير
 موجودة.
 
+## بوابة قبول استيراد المواد والدفعات
+
+نفذ الأوامر التالية من جذر المشروع:
+
+```bash
+pnpm test
+pnpm run typecheck
+pnpm run build
+pnpm run acceptance:inventory
+env -u DATABASE_URL PHASE0_PORT=8091 pnpm run phase0:baseline
+E2E_PORT_A=8181 E2E_PORT_B=8182 E2E_FRESH_PORT=8183 bash scripts/ci-e2e.sh
+```
+
+تستخدم الاختبارات بيانات اصطناعية ومنافذ معزولة. لا تشغل خادم API مستقلًا على
+`8080` بالتوازي مع `Start application`؛ الـworkflow الرئيسي هو الذي يشغّل API
+والواجهة معًا. افتح نموذج Excel يدويًا في برامج المكتب الفعلية قبل اعتماد
+البيانات التشغيلية.
+
 ## اختبارات بوابة المواد والدفعات — المراحل 0 و1 و2
 
 تولّد fixtures المرحلة 0 بيانات اصطناعية فقط:
@@ -128,7 +147,9 @@ BACKUP_SCHEDULE_INTERVAL_MS=86400000
 التحقق الحالي من وظائف النسخ يتم عبر اختبارات المشروع العامة:
 
 ```bash
-pnpm --filter @workspace/scripts run final:acceptance
+pnpm test
+pnpm run acceptance:inventory
+env -u DATABASE_URL pnpm run phase0:baseline
 ```
 
 أما اختبار المرحلة القديم فلم يعد ضمن ملفات المستودع الحالية. يغطي التشغيل

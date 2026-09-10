@@ -93,7 +93,7 @@ function isImportInput(value: unknown): value is ImportInput {
 
 async function analyzeImport(body: unknown, mode: "insert" | "upsert"): Promise<ImportAnalysis> {
   const { items, openingBatches } = importArrays(body);
-  const [allCategories, existing] = await Promise.all([
+  const [allCategories, existing, existingBatches] = await Promise.all([
     db.select({ id: categoriesTable.id, name: categoriesTable.name }).from(categoriesTable),
     db
       .select({
@@ -104,6 +104,16 @@ async function analyzeImport(body: unknown, mode: "insert" | "upsert"): Promise<
         requiresBatchTracking: itemsTable.requiresBatchTracking,
       })
       .from(itemsTable)
+      .where(isNotNull(itemsTable.code)),
+    db
+      .select({
+        code: itemsTable.code,
+        batchNumber: inventoryBatchesTable.batchNumber,
+        expiryDate: inventoryBatchesTable.expiryDate,
+        deliveryNoteNumber: inventoryBatchesTable.deliveryNoteNumber,
+      })
+      .from(inventoryBatchesTable)
+      .innerJoin(itemsTable, eq(inventoryBatchesTable.itemId, itemsTable.id))
       .where(isNotNull(itemsTable.code)),
   ]);
   const existingByCode = new Map(
@@ -139,6 +149,12 @@ async function analyzeImport(body: unknown, mode: "insert" | "upsert"): Promise<
   }
   const openingBatchRows = validateInventoryOpeningBatchRows(openingBatches, {
     existingByCode: projectedByCode,
+    existingBatchKeys: new Set(existingBatches.map((batch) => [
+      batch.code ?? "",
+      batch.batchNumber ?? "",
+      batch.expiryDate ?? "",
+      batch.deliveryNoteNumber ?? "",
+    ].join("|"))),
   });
   const allDecisions = [...itemRows, ...openingBatchRows];
   const errors = allDecisions.filter((decision) => decision.state === "error");
@@ -587,6 +603,7 @@ router.post(
 
         for (const decision of analysis.openingBatchRows) {
           if (decision.state === "empty") continue;
+          if (decision.skipExistingBatch || decision.action === "skip-existing-batch") continue;
           const itemId = decision.row.code ? itemIdsByCode.get(decision.row.code) : undefined;
           if (!itemId) throw new Error("IMPORT_ITEM_NOT_FOUND_AFTER_PREFLIGHT");
           await createInventoryMovementInTransaction(tx, {
