@@ -1439,8 +1439,13 @@ export async function createInventoryMovement(
   context: MovementContext,
 ) {
   try {
+    // Resolve the node identity before opening the transaction. PGlite uses a
+    // single connection per local database, so querying the global db handle
+    // from inside an active transaction can leave the movement request
+    // waiting indefinitely.
+    const node = await ensureNodeIdentity("web");
     return await db.transaction((tx) =>
-      createInventoryMovementInTransaction(tx, input, context),
+      createInventoryMovementInTransaction(tx, input, context, node),
     );
   } catch (error) {
     // Failed sensitive operations are also auditable. This insert is outside

@@ -7,3 +7,4 @@
 - [مصادقة GitHub للرفع](github-git-auth.md) — استخدم PAT من الأسرار عبر Basic helper مؤقت؛ لا تضع التوكن في remote أو تطبعه.
 - [Hook ما بعد الدمج](post-merge-hook.md) — وضع Desktop لا يملك قاعدة PostgreSQL مستضافة؛ يجب أن يكون إعداد drizzle في hook اختيارياً ومفعلاً صراحة.
 - [بوابة المواد والدفعات](inventory-phase0-phase2.md) — فحوص خط الأساس المعزولة في Desktop تحتاج إزالة DATABASE_URL الموروث قبل تشغيلها.
+- [حدود معاملات PGlite](pglite-transaction-connection.md) — لا تستخدم اتصال قاعدة البيانات العام داخل معاملة PGlite؛ قد يعلق الطلب حتى انتهاء مهلة fetch.
