@@ -98,6 +98,20 @@ async function initializeDesktopDatabase(): Promise<void> {
     await desktopClient.exec(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS origin_node_id text;`);
     await desktopClient.exec(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS origin_sequence integer;`);
     await desktopClient.exec(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS document_number_scope text;`);
+    // Phase 2 inventory policy columns. Keep this repair additive so existing
+    // desktop data directories boot without a destructive rebuild.
+    await desktopClient.exec(
+      `ALTER TABLE items ADD COLUMN IF NOT EXISTS requires_expiry_tracking boolean NOT NULL DEFAULT false;`,
+    );
+    await desktopClient.exec(
+      `ALTER TABLE items ADD COLUMN IF NOT EXISTS requires_batch_tracking boolean NOT NULL DEFAULT false;`,
+    );
+    await desktopClient.exec(
+      `ALTER TABLE inventory_batches ADD COLUMN IF NOT EXISTS supplier text;`,
+    );
+    await desktopClient.exec(
+      `CREATE INDEX IF NOT EXISTS inventory_batches_item_fefo_idx ON inventory_batches (item_id, expiry_date, id) WHERE remaining_quantity > 0;`,
+    );
     await desktopClient.exec(`CREATE UNIQUE INDEX IF NOT EXISTS transactions_operation_id_unique ON "transactions" ("operation_id");`);
     await desktopClient.exec(`DO $fix$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_item_id_items_id_fk') THEN ALTER TABLE transactions ADD CONSTRAINT transactions_item_id_items_id_fk FOREIGN KEY (item_id) REFERENCES items(id); END IF; END $fix$;`);
     await desktopClient.exec(`DO $fix$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_equipment_id_equipment_id_fk') THEN ALTER TABLE transactions ADD CONSTRAINT transactions_equipment_id_equipment_id_fk FOREIGN KEY (equipment_id) REFERENCES equipment(id); END IF; END $fix$;`);

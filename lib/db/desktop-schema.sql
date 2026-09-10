@@ -209,6 +209,8 @@ CREATE TABLE "items" (
 	"unit" text NOT NULL,
 	"current_stock" integer DEFAULT 0 NOT NULL,
 	"min_stock" integer DEFAULT 0 NOT NULL,
+	"requires_expiry_tracking" boolean DEFAULT false NOT NULL,
+	"requires_batch_tracking" boolean DEFAULT false NOT NULL,
 	"expiry_date" date,
 	"batch_number" text,
 	"location" text,
@@ -317,6 +319,7 @@ CREATE TABLE "inventory_batches" (
 	"received_quantity" integer NOT NULL,
 	"remaining_quantity" integer NOT NULL,
 	"expiry_date" date,
+	"supplier" text,
 	"delivery_note_number" text,
 	"delivery_note_date" date,
 	"supply_source" text DEFAULT 'central_warehouses' NOT NULL,
@@ -557,6 +560,8 @@ CREATE INDEX "transactions_item_idx" ON "transactions" USING btree ("item_id");
 CREATE INDEX "transactions_equipment_idx" ON "transactions" USING btree ("equipment_id");
 --> statement-breakpoint
 CREATE INDEX "inventory_batches_item_expiry_idx" ON "inventory_batches" USING btree ("item_id","expiry_date");
+--> statement-breakpoint
+CREATE INDEX "inventory_batches_item_fefo_idx" ON "inventory_batches" USING btree ("item_id","expiry_date","id") WHERE "remaining_quantity" > 0;
 --> statement-breakpoint
 CREATE INDEX "inventory_batches_source_transaction_idx" ON "inventory_batches" USING btree ("source_transaction_id");
 --> statement-breakpoint

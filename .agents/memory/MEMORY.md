@@ -5,3 +5,4 @@
 - [بناء Android في Replit](android-release-toolchain.md) — Capacitor 7 يحتاج JDK 21؛ استخدم SDK الرسمي المؤقت عند غياب حزمة androidsdk.
 - [إدارة GitHub Releases](github-release-operations.md) — عند تعثر جلب السر داخل sandbox، نفّذ GitHub API عبر متغير البيئة دون طباعته وتحقق من الأصول بعد الحذف.
 - [Hook ما بعد الدمج](post-merge-hook.md) — وضع Desktop لا يملك قاعدة PostgreSQL مستضافة؛ يجب أن يكون إعداد drizzle في hook اختيارياً ومفعلاً صراحة.
+- [بوابة المواد والدفعات](inventory-phase0-phase2.md) — فحوص خط الأساس المعزولة في Desktop تحتاج إزالة DATABASE_URL الموروث قبل تشغيلها.

@@ -34,6 +34,7 @@ export const inventoryBatchesTable = pgTable(
     receivedQuantity: integer("received_quantity").notNull(),
     remainingQuantity: integer("remaining_quantity").notNull(),
     expiryDate: date("expiry_date", { mode: "string" }),
+    supplier: text("supplier"),
     deliveryNoteNumber: text("delivery_note_number"),
     deliveryNoteDate: date("delivery_note_date", { mode: "string" }),
     supplySource: text("supply_source")

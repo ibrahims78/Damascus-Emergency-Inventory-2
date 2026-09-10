@@ -95,6 +95,22 @@ pnpm --filter @workspace/web run dev
 خارج المستودع فلم تعد أوامر مدعومة، حتى لا تشير وثائق التشغيل إلى ملفات غير
 موجودة.
 
+## اختبارات بوابة المواد والدفعات — المراحل 0 و1 و2
+
+تولّد fixtures المرحلة 0 بيانات اصطناعية فقط:
+
+```bash
+pnpm run phase0:fixtures
+pnpm test lib/db/src/phase2-migration.test.ts
+pnpm run build
+env -u DATABASE_URL pnpm run phase0:baseline
+```
+
+يرفض `phase0:baseline` العمل عند وجود `DATABASE_URL`، ويشغّل API على قاعدة
+PGlite مؤقتة ثم يحذفها. لا تستخدمه ضد `.damascus-data` أو أي قاعدة مستضافة.
+نسخة بيانات التطوير قبل الترحيل تحفظ محليًا في `.local/phase0-backups/` ولا
+تُرفع إلى المستودع.
+
 ## تشغيل المرحلة 6 — النسخ الكامل والتفاضلي
 
 الجدولة في خادم الويب اختيارية ومغلقة افتراضياً. لتفعيلها في بيئة التشغيل، احفظ

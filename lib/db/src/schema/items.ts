@@ -25,6 +25,10 @@ export const itemsTable = pgTable(
     unit: text("unit").notNull(),
     currentStock: integer("current_stock").notNull().default(0),
     minStock: integer("min_stock").notNull().default(0),
+    // Phase 2 policy flags. False preserves the legacy behavior until an
+    // item or category is explicitly classified as requiring tracking.
+    requiresExpiryTracking: boolean("requires_expiry_tracking").notNull().default(false),
+    requiresBatchTracking: boolean("requires_batch_tracking").notNull().default(false),
     // Legacy summary fields remain for backwards compatibility. Detailed
     // expiry/batch data is stored in inventory_batches.
     expiryDate: date("expiry_date", { mode: "string" }),
