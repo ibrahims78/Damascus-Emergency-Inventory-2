@@ -6,7 +6,7 @@
 
 تم تشغيل المشروع من الفرع `master` المرتبط بمستودع GitHub عبر HTTPS:
 
-- المستودع: `https://github.com/ibrahims78/Damascus-Emergency-Inventory-2`
+- المستودع: `https://github.com/ibrahims78/Damascus-Health-Directorate`
 - الفرع: `master`
 - OAuth: غير مستخدم
 - بيانات الإنتاج والأسرار: خارج نطاق الاختبار
