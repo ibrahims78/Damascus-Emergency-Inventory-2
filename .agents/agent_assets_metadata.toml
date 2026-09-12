@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "r36VyFXsLXwkk3V_0ekkJ"
+uri = "file://release-secrets-v4.0.2-updated.zip"
+type = "unspecified"
+title = "مجلد مفاتيح وتراخيص الإصدار v4.0.2 — Windows وAndroid"
+description = "نسخة محدثة وجاهزة للاستخدام: المفاتيح الخاصة وAndroid keystore محفوظة كما هي، مولدات التفعيل محدثة للإصدار 4.0.2، و13 ترخيصًا معاد إصدارها ومتحقق من توقيعها بالمفاتيح العامة المطابقة."
+logical_id = "c89ca9d4-158a-43b9-8d7a-3fad03ca7b0c"
+content_hash = "sha256:0d234ba929e6838fec87a1e574eae1f6cda98e1640330b740eccd574ca92eb3e"
+size = 42880
+mtime_ms = 1789241867807
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:aeb7e9d9-e2a5-418f-8858-d6f1b9b503f2/c89ca9d4-158a-43b9-8d7a-3fad03ca7b0c/a2fbde6b-240d-47b5-9f84-12b02055f64e"
+storage_version_token = "1789241873003146"
+content_type = "application/octet-stream"
