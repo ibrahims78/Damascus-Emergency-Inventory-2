@@ -2182,13 +2182,12 @@ pnpm --filter @workspace/scripts run phase6:backup
 
 ## 29. حالة GitHub وريبليت
 
-تم ربط مساحة عمل Replit بالمستودع:
-`https://github.com/ibrahims78/Damascus-Emergency-Inventory.git` على الفرع
-الافتراضي `main`، وضُبط `origin` عبر HTTPS مع تتبع `origin/main`. القراءة
-والاستنساخ يعملان دون OAuth لأن المستودع عام. لا يوجد حالياً `GITHUB_TOKEN`
-محفوظ في Replit Secrets؛ لذلك يبقى الدفع إلى `origin/main` خطوة تشغيلية معلقة
-إلى أن يضيف المالك رمز وصول آمن عبر نموذج الأسرار. لن يوضع الرمز في remote أو
-الملفات أو المحادثة، وبعد الدفع يجب فحص تطابق `HEAD` مع `origin/main`.
+تم ربط مساحة عمل Replit بالمستودع الحالي:
+`https://github.com/ibrahims78/Damascus-Health-Directorate.git` على الفرع
+`master`، وضُبط `origin` عبر HTTPS مع تتبع `origin/master`. القراءة والدفع
+يعملان دون OAuth عبر رمز وصول محفوظ في Replit Secrets، ولا يوضع الرمز في
+عنوان remote أو الملفات أو المحادثة. بعد كل رفع يجب فحص تطابق `HEAD` مع
+`origin/master`.
 
 ## 30. تقرير التحقق النهائي للمراحل 1–6
 
@@ -2573,13 +2572,14 @@ console لطلبات محمية قبل تسجيل الدخول، وهذا متو
 
 ```text
 branch: main
-remote: https://github.com/ibrahims78/Damascus-Emergency-Inventory.git
-read/fetch: PASS دون OAuth
-قبل تحديث هذا التقرير: HEAD == origin/main
+remote: https://github.com/ibrahims78/Damascus-Health-Directorate.git
+branch: master
+read/fetch/push: PASS عبر HTTPS دون OAuth
+بعد تحديث هذا التقرير: HEAD == origin/master
 ```
 
-هذا التحديث الوثائقي هو التغيير المحلي الوحيد في هذه الدورة. سيُدفع إلى
-`origin/main` عبر HTTPS بعد توفير `GITHUB_TOKEN` في Replit Secrets. لن يُحفظ
+هذا التحديث الوثائقي يُدفع إلى `origin/master` عبر HTTPS باستخدام
+`GITHUB_TOKEN` المحفوظ في Replit Secrets. لن يُحفظ
 الرمز في Git أو في `origin` أو في هذه الوثيقة. بعد الدفع يجب تنفيذ:
 
 ```bash

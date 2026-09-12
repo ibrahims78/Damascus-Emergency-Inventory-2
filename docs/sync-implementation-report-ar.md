@@ -1,6 +1,6 @@
 # تقرير تنفيذ المزامنة الكاملة (Capture → Transport → Materialization)
 
-**المشروع:** Damascus-Emergency-Inventory (نظام مخزون الطوارئ – دمشق)
+**المشروع:** Damascus-Health-Directorate (مستودعات مديرية صحة دمشق)
 **التاريخ:** 2026-08-27
 **الحالة:** ✅ مكتمل ومُختبَر بنجاح (44/44 اختباراً)
 
