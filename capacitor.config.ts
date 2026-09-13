@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'syrian.emergency.inventory',
-  appName: 'مستودعات مديرية صحة دمشق',
+  appName: 'Damascus Health Directorate',
   webDir: process.env.CAPACITOR_WEB_DIR ?? 'artifacts/web/dist/public',
   bundledWebRuntime: false,
   android: {

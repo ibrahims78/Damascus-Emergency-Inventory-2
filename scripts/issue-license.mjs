@@ -5,7 +5,7 @@
  * Usage:
  *   node scripts/issue-license.mjs --platform windows|android \
  *     --device-id <deviceId-from-the-client-gate> \
- *     [--private-key release-artifacts/v4.0.2/release-secrets/<platform>/license-private-key.pem] \
+ *     [--private-key release-secrets-v4.0.3/<platform>/license-private-key.pem] \
  *     [--key-id <keyId>] [--expires 2027-12-31] [--app-version "*"] \
  *     [--features all] [--out license.txt]
  *
@@ -32,13 +32,17 @@ if (!deviceId) {
   process.exit(1);
 }
 const root = path.resolve(import.meta.dirname ?? process.cwd(), "..");
-const releaseVersion = process.env.DAMASCUS_RELEASE_VERSION ?? "v4.0.2";
+const releaseVersion = process.env.DAMASCUS_RELEASE_VERSION ?? "v4.0.3";
+const externalSecretsRoot = process.env.DAMASCUS_RELEASE_SECRETS_DIR;
 const privateKeyPath = path.resolve(
-  arg("private-key") ?? path.join(root, "release-artifacts", releaseVersion, "release-secrets", platform, "license-private-key.pem"),
+  arg("private-key") ??
+    (externalSecretsRoot
+      ? path.join(externalSecretsRoot, platform, "license-private-key.pem")
+      : path.join(root, "release-artifacts", releaseVersion, "release-secrets", platform, "license-private-key.pem")),
 );
 const keyId = arg("key-id") ?? fs.readFileSync(path.join(path.dirname(privateKeyPath), "key-id.txt"), "utf8").trim();
 const expiresAt = arg("expires") ?? null;
-const appVersion = arg("app-version") ?? "*";
+const appVersion = arg("app-version") ?? "4.0.3";
 const features = (arg("features") ?? "all").split(",").map((f) => f.trim()).filter(Boolean);
 const outPath = arg("out");
 
