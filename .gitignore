@@ -78,6 +78,7 @@ release-artifacts/v*/windows/*.zip
 release-artifacts/v*/android/*.apk
 release-artifacts/v*/android/*WebBundle*.zip
 release-artifacts/v*/Damascus-Health-Directorate-v*-Activation-Kit.zip
+release-artifacts/v*/Damascus-Health-Directorate-v*-Vendor-Activation-Kit.zip
 
 # runtime logs from the license generators
 issued-licenses-*.log
