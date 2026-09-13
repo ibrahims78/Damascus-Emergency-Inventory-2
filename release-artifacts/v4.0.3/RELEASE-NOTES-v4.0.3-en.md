@@ -1,41 +1,45 @@
 # Release notes 4.0.3 — Damascus Health Directorate packages
 
-## التحديثات
+## Updates
 
-- استبدال الشعار الرئيسي بشعار **مديرية صحة دمشق / Damascus Health Directorate** المرفق والمعتمد.
-- توحيد الشعار في شاشة الدخول، الشريط الجانبي، صفحات الخطأ، التقارير المطبوعة وسندات العمليات.
-- تحديث favicon وأيقونة الويب وأيقونات التشغيل وشاشة البدء لنسخة Android.
-- تحديث شعار نافذة نسخة Windows المعبأة.
-- إعادة تسمية حزم Windows وAndroid إلى **Damascus Health Directorate**.
-- توحيد إصدار التطبيق إلى `4.0.3` و`versionCode=403`.
-- تصحيح اسم ملف ومجلد Windows التنفيذي مع إبقاء معرّف Android التقني القديم للتوافق مع التحديثات.
-- استخدام ملف ICO الرسمي لشعار مديرية صحة دمشق في نافذة Windows.
-- تصحيح مولدات التفعيل وإعادة إصدار تراخيص Android وWindows لتطابق `appVersion=4.0.3`.
-- بناء نسخ Android عادية ومحمية ونسخ Windows عادية ومحمية من نفس مصدر `master`.
+- Updated the product identity to **Damascus Health Directorate**.
+- Unified the official logo across the login screen, navigation, reports,
+  printed transactions, Android startup assets, and Windows packaging.
+- Set the application version to `4.0.3` and Android `versionCode=403`.
+- Renamed the Windows and Android release packages to
+  `Damascus-Health-Directorate`.
+- Kept the legacy Android application ID and license product identifier only
+  where required for upgrade and existing-license compatibility.
+- Updated the Windows and Android activation tools to identify the new product
+  while preserving the legacy license payload fields required by the runtime.
 
-## الملفات
+## Published files
 
 - `Damascus-Health-Directorate-v4.0.3-Android-Offline.apk`
 - `Damascus-Health-Directorate-v4.0.3-Android-Protected.apk`
 - `Damascus-Health-Directorate-v4.0.3-Windows-Offline.zip`
 - `Damascus-Health-Directorate-v4.0.3-Windows-Protected.zip`
-- `SHA256SUMS` لكل منصة
+- `SHA256SUMS-Android.txt`
+- `SHA256SUMS-Windows.txt`
 
-## التحقق المنفذ
+## Verification completed
 
-- `pnpm run typecheck` ناجح.
-- 46 اختبارًا ناجحًا.
-- توقيع APK محقق على Android v1 وv2، مع بصمة توقيع موحدة للنسختين.
-- APK يحمل `versionCode=403` و`versionName=4.0.3` و`compileSdk=35`.
-- محتوى الويب داخل APK يطابق مخرجات المشروع؛ ملفات Capacitor runtime الإضافية متوقعة.
-- محتوى الويب داخل `app.asar` يطابق مخرجات المشروع للنسختين العادية والمحمية.
-- المفتاح العام الصحيح مضمّن في Android Protected وفي حزمة Windows Protected.
-- مولدا تراخيص Windows وAndroid أنشآ تراخيص اختبار موقعة، وتم التحقق منها بالمفتاح العام للمنصة.
-- خادم API المعبأ وواجهة الملفات الثابتة اجتازا فحص health محليًا عندما شُغّلت الحزمة.
+- Standard and protected web bundles built successfully from `master`.
+- Standard and protected API bundles built successfully.
+- Both APKs report `versionName=4.0.3`, `versionCode=403`, and
+  `compileSdk=35`.
+- Both APKs report the visible application label
+  `Damascus Health Directorate`.
+- Both APKs pass Android v1 and v2 signature verification.
+- Both Windows archives contain the renamed executable and `app.asar` with
+  product version `4.0.3`.
+- Windows and Android SHA-256 files were regenerated from the published files.
 
-## ملاحظات مهمة
+## Security and testing notes
 
-- سكربت Android يقرأ keystore وكلمات المرور من `DAMASCUS_RELEASE_SECRETS_DIR` ومتغيرات البيئة، ولا يضمّن أسرارًا في Git.
-- مولدات التفعيل أدوات داخلية للمشغّل فقط؛ لا تُنشر معها المفاتيح الخاصة.
-- تم اختبار مولد التفعيل محليًا والتحقق من التوقيع، المنصة، معرّف الجهاز، وإصدار الترخيص.
-- اختبار التشغيل التفاعلي النهائي يحتاج جهاز Windows فعليًا وجهازًا أو محاكي Android؛ تم هنا التحقق من إعادة التجميع، التوقيع، محتوى الحزمة، وملفات التفعيل.
+- Public release assets do not contain private keys, Android keystores, or
+  credentials.
+- License signing material must remain in an encrypted vendor vault and must
+  not be uploaded with the activation kit.
+- Final interactive testing still requires a Windows machine and an Android
+  device or emulator.
