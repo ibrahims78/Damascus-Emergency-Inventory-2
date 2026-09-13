@@ -14,3 +14,17 @@ mtime_ms = 1789241867807
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:aeb7e9d9-e2a5-418f-8858-d6f1b9b503f2/c89ca9d4-158a-43b9-8d7a-3fad03ca7b0c/a2fbde6b-240d-47b5-9f84-12b02055f64e"
 storage_version_token = "1789241873003146"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "_VyC8OiZ9lH8du3JmraJt"
+uri = "file://release-artifacts/v4.0.3/Damascus-Health-Directorate-v4.0.3-Activation-Kit.zip"
+type = "unspecified"
+title = "Damascus Health Directorate v4.0.3 — Activation Kit"
+description = "حزمة التفعيل العامة المحدثة باسم مديرية صحة دمشق، وتشمل مولدات Windows وAndroid، مفاتيح التحقق العامة، وتراخيص اختبار. لا تحتوي مفاتيح خاصة أو Keystore أو كلمات مرور."
+logical_id = "58a87e5a-d221-4b32-988b-920472571b88"
+content_hash = "sha256:023095d51b361bc3fdf0368d57109ce5476aa47e39f6ab0a65e6965002358f98"
+size = 21330
+mtime_ms = 1789282814399
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:0fc225fd-39bf-49d4-a965-522aabdc1bde/58a87e5a-d221-4b32-988b-920472571b88/97aba565-310b-4e70-a74d-3d21c30a37c1"
+storage_version_token = "1789282957284301"
+content_type = "application/octet-stream"
