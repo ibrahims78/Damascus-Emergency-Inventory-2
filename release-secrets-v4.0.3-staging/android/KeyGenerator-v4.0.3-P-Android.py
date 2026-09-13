@@ -1,7 +1,7 @@
 """
 Damascus Health Directorate - License Key Generator (android)  v4.0.3-P
 =====================================================================
-  Generates activation licenses for the Damascus Emergency Inventory
+  Generates activation licenses for the Damascus Health Directorate
   PROTECTED Android application (v4.0.3, Ed25519-signed).
   Usage: python KeyGenerator-v4.0.3-P-Android.py
   Requires: Python 3.6+  |  No external packages needed.
@@ -157,6 +157,8 @@ def issue_license(device_id, expires_at=None, features=("all",)):
         "format": "dme-license",
         "version": 1,
         "keyId": "da2fb74422708bcb",
+        # Legacy product identifier is retained for existing license
+        # validation and upgrade compatibility.
         "product": "damascus-emergency-inventory",
         "platform": android,
         "deviceId": device_id,

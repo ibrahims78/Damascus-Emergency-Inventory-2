@@ -59,6 +59,8 @@ Thumbs.db
 *.pem
 *.key
 *private*key*
+release-secrets-v*/**/*credentials*.txt
+release-secrets-v*.zip
 release-secrets/
 release-staging/
 
@@ -75,6 +77,7 @@ attached_assets/
 release-artifacts/v*/windows/*.zip
 release-artifacts/v*/android/*.apk
 release-artifacts/v*/android/*WebBundle*.zip
+release-artifacts/v*/Damascus-Health-Directorate-v*-Activation-Kit.zip
 
 # runtime logs from the license generators
 issued-licenses-*.log

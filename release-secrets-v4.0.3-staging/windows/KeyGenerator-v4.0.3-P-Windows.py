@@ -1,7 +1,7 @@
 """
 Damascus Health Directorate - License Key Generator (windows)  v4.0.3-P
 =====================================================================
-  Generates activation licenses for the Damascus Emergency Inventory
+  Generates activation licenses for the Damascus Health Directorate
   PROTECTED desktop application (v4.0.3, Ed25519-signed).
   Usage: python KeyGenerator-v4.0.3-P-Windows.py
   Requires: Python 3.6+  |  No external packages needed.
@@ -157,6 +157,8 @@ def issue_license(device_id, expires_at=None, features=("all",)):
         "format": "dme-license",
         "version": 1,
         "keyId": "769e2865cd0d57f3",
+        # Legacy product identifier is retained for existing license
+        # validation and upgrade compatibility.
         "product": "damascus-emergency-inventory",
         "platform": windows,
         "deviceId": device_id,
